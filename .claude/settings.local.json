@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(claude mcp add:*)",
+      "Bash(npm run dev:*)",
+      "Bash(dir:*)",
+      "Bash(npm install:*)",
+      "Bash(copy:*)",
+      "Bash(node -c:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(npm uninstall:*)",
+      "Bash(git checkout:*)",
+      "Bash(cat:*)",
+      "Bash(claude:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developer.chrome.com)",
+      "Bash(where:*)",
+      "Bash(\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --user-data-dir=\"%TEMP%\\chrome-debug\" --new-window http://localhost:5173)",
+      "mcp__chrome-devtools__list_pages",
+      "Bash(npm run dev:frontend:*)",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__get_console_message",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__take_screenshot",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

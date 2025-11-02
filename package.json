@@ -1,0 +1,71 @@
+{
+  "name": "dbx-connector-vue",
+  "version": "1.0.0",
+  "description": "DBx Connector for zzTakeoff - Vue.js + AG Grid Electron Edition",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build-frontend": "cd frontend && npm run build",
+    "build": "npm run build-frontend && electron-builder build --win --publish never",
+    "dist": "npm run build-frontend && electron-builder --win"
+  },
+  "keywords": [
+    "electron",
+    "database",
+    "construction",
+    "databuild",
+    "zztakeoff",
+    "serverless"
+  ],
+  "author": "DBx Connector",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "electron-store": "^8.2.0",
+    "mssql": "^10.0.1"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.dbxconnector.vue",
+    "productName": "DBx Connector Vue",
+    "copyright": "Copyright © 2025 DBx Connector",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "settings.html",
+      "src/**/*",
+      "frontend/dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "forceCodeSigning": false,
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DBx Connector Vue"
+    }
+  }
+}
