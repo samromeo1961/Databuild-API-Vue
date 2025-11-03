@@ -3,24 +3,40 @@ const { getPool } = require('../database/connection');
 /**
  * Get all contact groups for filtering
  * IPC Handler: 'contacts:get-groups'
- * Note: ContactGroup table doesn't exist in this database
- * Returns empty list for compatibility
  */
 async function getContactGroups(event, params) {
   try {
-    // ContactGroup table doesn't exist - return empty list
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    // Try to query ContactGroup table
+    const query = `
+      SELECT
+        Code,
+        Name,
+        Lcolor
+      FROM ContactGroup
+      ORDER BY Code
+    `;
+
+    const result = await pool.request().query(query);
+
     return {
       success: true,
-      count: 0,
-      data: []
+      count: result.recordset.length,
+      data: result.recordset
     };
 
   } catch (err) {
     console.error('Error fetching contact groups:', err);
+    // If table doesn't exist, return empty list for compatibility
     return {
-      success: false,
-      error: 'Failed to fetch contact groups',
-      message: err.message
+      success: true,
+      count: 0,
+      data: [],
+      note: 'ContactGroup table may not exist in this database'
     };
   }
 }
@@ -111,7 +127,7 @@ async function getContactsList(event, params) {
         C.Notes
       FROM Contacts C
       ${whereClause}
-      ORDER BY C.Name
+      ORDER BY C.Code
       OFFSET @offset ROWS
       FETCH NEXT @limit ROWS ONLY
     `;

@@ -35,7 +35,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Suppliers
   suppliers: {
     getGroups: (params) => ipcRenderer.invoke('suppliers:get-groups', params),
-    getList: (params) => ipcRenderer.invoke('suppliers:get-list', params)
+    getList: (params) => ipcRenderer.invoke('suppliers:get-list', params),
+    archive: (params) => ipcRenderer.invoke('suppliers:archive', params),
+    updateGroup: (params) => ipcRenderer.invoke('suppliers:update-group', params)
   },
 
   // Preferences

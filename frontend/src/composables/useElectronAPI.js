@@ -41,7 +41,9 @@ export function useElectronAPI() {
     // Suppliers
     suppliers: {
       getGroups: (params) => window.electronAPI?.suppliers.getGroups(params),
-      getList: (params) => window.electronAPI?.suppliers.getList(params)
+      getList: (params) => window.electronAPI?.suppliers.getList(params),
+      archive: (params) => window.electronAPI?.suppliers.archive(params),
+      updateGroup: (params) => window.electronAPI?.suppliers.updateGroup(params)
     },
 
     // Preferences

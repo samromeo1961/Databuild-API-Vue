@@ -18,8 +18,8 @@
       </div>
 
       <!-- Search Bar -->
-      <div class="row mb-3">
-        <div class="col-md-5">
+      <div class="row mb-3 align-items-center">
+        <div class="col-md-3">
           <div class="input-group">
             <span class="input-group-text">
               <i class="bi bi-search"></i>
@@ -52,15 +52,8 @@
             </option>
           </select>
         </div>
-        <div class="col-md-5">
-          <div class="btn-group w-100">
-            <button
-              class="btn btn-outline-secondary"
-              @click="openColumnPanel"
-              title="Manage Columns"
-            >
-              <i class="bi bi-layout-three-columns"></i>
-            </button>
+        <div class="col-md-7">
+          <div class="d-flex justify-content-end align-items-center gap-3">
             <button
               class="btn btn-outline-primary"
               @click="handleAddToFavourites"
@@ -75,7 +68,7 @@
               :disabled="selectedRows.length === 0"
               title="Add to Template"
             >
-              <i class="bi bi-plus-circle"></i> Template
+              <i class="bi bi-plus-circle"></i>
             </button>
             <button
               class="btn btn-warning"
@@ -83,7 +76,14 @@
               :disabled="selectedRows.length === 0"
               title="Send to zzTakeoff"
             >
-              <i class="bi bi-send"></i> zzTakeoff
+              <i class="bi bi-send"></i>
+            </button>
+            <button
+              class="btn btn-outline-secondary"
+              @click="openColumnPanel"
+              title="Manage Columns"
+            >
+              <i class="bi bi-layout-three-columns"></i>
             </button>
             <button
               class="btn btn-outline-info"
@@ -116,7 +116,6 @@
         :columnDefs="columnDefs"
         :rowData="rowData"
         :defaultColDef="defaultColDef"
-        :sideBar="sideBar"
         :pagination="true"
         :paginationPageSize="pageSize"
         :paginationPageSizeSelector="pageSizeOptions"
@@ -132,6 +131,152 @@
         @column-visible="onColumnVisible"
       />
     </div>
+
+    <!-- Column Management Modal -->
+    <div
+      class="modal fade"
+      id="columnManagementModal"
+      tabindex="-1"
+      aria-labelledby="columnManagementModalLabel"
+      aria-hidden="true"
+      ref="columnManagementModalRef"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="columnManagementModalLabel">
+              <i class="bi bi-layout-three-columns me-2"></i>Manage Columns
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row mb-3">
+              <div class="col">
+                <p class="text-muted mb-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Drag to reorder, check to show/hide, or use pin buttons. Changes are saved automatically.
+                </p>
+              </div>
+            </div>
+
+            <draggable
+              v-model="managedColumns"
+              item-key="field"
+              @end="onColumnReorder"
+              handle=".drag-handle"
+              class="list-group"
+            >
+              <template #item="{element: col}">
+                <div class="list-group-item d-flex align-items-center">
+                  <div class="drag-handle me-2" style="cursor: move;">
+                    <i class="bi bi-grip-vertical text-muted"></i>
+                  </div>
+                  <div class="form-check me-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      :id="`col-${col.field}`"
+                      v-model="col.visible"
+                      @change="toggleColumnVisibility(col)"
+                    />
+                  </div>
+                  <div class="flex-grow-1">
+                    <label :for="`col-${col.field}`" class="mb-0 fw-medium">
+                      {{ col.headerName }}
+                      <span v-if="col.pinned" class="badge bg-primary ms-2">
+                        <i class="bi bi-pin-angle-fill"></i> {{ col.pinned }}
+                      </span>
+                    </label>
+                    <small class="d-block text-muted">{{ col.field }}</small>
+                  </div>
+                  <div class="btn-group btn-group-sm me-2">
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': col.pinned === 'left' }"
+                      @click="pinColumn(col, 'left')"
+                      title="Pin Left"
+                    >
+                      <i class="bi bi-pin-angle"></i> Left
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': !col.pinned }"
+                      @click="pinColumn(col, null)"
+                      title="Unpin"
+                    >
+                      <i class="bi bi-dash-circle"></i>
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': col.pinned === 'right' }"
+                      @click="pinColumn(col, 'right')"
+                      title="Pin Right"
+                    >
+                      <i class="bi bi-pin-angle"></i> Right
+                    </button>
+                  </div>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    @click="showRenameColumn(col)"
+                    title="Rename column"
+                  >
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                </div>
+              </template>
+            </draggable>
+
+            <div class="mt-3 d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" @click="showAllColumns">
+                <i class="bi bi-eye me-1"></i>Show All
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" @click="resetColumnSettings">
+                <i class="bi bi-arrow-clockwise me-1"></i>Reset to Default
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rename Column Modal -->
+    <div
+      class="modal fade"
+      id="renameColumnModal"
+      tabindex="-1"
+      aria-labelledby="renameColumnModalLabel"
+      aria-hidden="true"
+      ref="renameColumnModalRef"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="renameColumnModalLabel">Rename Column</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="columnNewName" class="form-label">Column Name</label>
+              <input
+                type="text"
+                id="columnNewName"
+                class="form-control"
+                v-model="renameColumnName"
+                placeholder="Enter column name..."
+              />
+              <small class="text-muted">Field: {{ renameColumnField }}</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" @click="confirmRenameColumn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -139,6 +284,8 @@
 import { ref, computed, onMounted, watch, inject } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { Modal } from 'bootstrap';
+import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -159,6 +306,15 @@ const pageSizeOptions = [25, 50, 100, 200];
 const sortField = ref(null);
 const sortOrder = ref('asc');
 
+// Column Management Modal
+const columnManagementModalRef = ref(null);
+const renameColumnModalRef = ref(null);
+let columnManagementModal = null;
+let renameColumnModal = null;
+const managedColumns = ref([]);
+const renameColumnField = ref('');
+const renameColumnName = ref('');
+
 // Check if dark mode
 const isDarkMode = computed(() => {
   return theme && theme.value === 'dark';
@@ -170,29 +326,6 @@ const rowSelectionConfig = {
   checkboxes: true,
   headerCheckbox: true,
   enableClickSelection: false
-};
-
-// Sidebar configuration for column panel
-const sideBar = {
-  toolPanels: [
-    {
-      id: 'columns',
-      labelDefault: 'Columns',
-      labelKey: 'columns',
-      iconKey: 'columns',
-      toolPanel: 'agColumnsToolPanel',
-      toolPanelParams: {
-        suppressRowGroups: true,
-        suppressValues: true,
-        suppressPivots: true,
-        suppressPivotMode: true,
-        suppressColumnFilter: false,
-        suppressColumnSelectAll: false,
-        suppressColumnExpandAll: false
-      }
-    }
-  ],
-  defaultToolPanel: ''
 };
 
 // AG Grid column definitions - ALL REQUIRED COLUMNS
@@ -326,32 +459,6 @@ const defaultColDef = {
   enableCellChangeFlash: true
 };
 
-// Column state persistence key
-const COLUMN_STATE_KEY = 'catalogueColumnState';
-
-// Save column state
-const saveColumnState = () => {
-  if (gridApi.value) {
-    const columnState = gridApi.value.getColumnState();
-    localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(columnState));
-    console.log('Column state saved:', columnState);
-  }
-};
-
-// Restore column state
-const restoreColumnState = () => {
-  const savedState = localStorage.getItem(COLUMN_STATE_KEY);
-  if (savedState && gridApi.value) {
-    try {
-      const columnState = JSON.parse(savedState);
-      gridApi.value.applyColumnState({ state: columnState, applyOrder: true });
-      console.log('Column state restored');
-    } catch (err) {
-      console.error('Error restoring column state:', err);
-    }
-  }
-};
-
 // Debounce timer
 let searchDebounce = null;
 
@@ -430,8 +537,8 @@ const onFilterChange = () => {
 const onGridReady = (params) => {
   gridApi.value = params.api;
 
-  // Restore column state
-  restoreColumnState();
+  // Load saved column state
+  loadColumnState();
 
   // Add click event listener for row actions
   params.api.addEventListener('cellClicked', (event) => {
@@ -486,10 +593,174 @@ const onColumnVisible = () => {
   saveColumnState();
 };
 
-// Open column panel
+// Column Management Functions
 const openColumnPanel = () => {
-  if (gridApi.value) {
-    gridApi.value.openToolPanel('columns');
+  if (!gridApi.value) return;
+
+  // Get current column state from grid
+  const columnState = gridApi.value.getColumnState();
+
+  // Build managed columns list based on current grid order
+  managedColumns.value = columnState
+    .filter(state => state.colId && state.colId !== 'ag-Grid-SelectionColumn' && state.colId !== 'actions')
+    .map(state => {
+      const colDef = gridApi.value.getColumnDef(state.colId);
+      return {
+        field: state.colId,
+        headerName: colDef?.headerName || state.colId,
+        visible: !state.hide,
+        pinned: state.pinned || null,
+        width: state.width || colDef?.width || 150
+      };
+    });
+
+  if (columnManagementModal) {
+    columnManagementModal.show();
+  }
+};
+
+const toggleColumnVisibility = (column) => {
+  if (!gridApi.value) return;
+
+  gridApi.value.applyColumnState({
+    state: [{
+      colId: column.field,
+      hide: !column.visible
+    }],
+    defaultState: { hide: false }
+  });
+
+  saveColumnState();
+};
+
+const onColumnReorder = () => {
+  if (!gridApi.value) return;
+
+  const orderedColIds = managedColumns.value.map(col => col.field);
+
+  gridApi.value.applyColumnState({
+    state: orderedColIds.map((colId, index) => ({
+      colId,
+      sortIndex: index
+    })),
+    applyOrder: true
+  });
+
+  saveColumnState();
+};
+
+const pinColumn = (column, position) => {
+  if (!gridApi.value) return;
+
+  column.pinned = position;
+
+  gridApi.value.applyColumnState({
+    state: [{
+      colId: column.field,
+      pinned: position
+    }],
+    defaultState: { pinned: null }
+  });
+
+  saveColumnState();
+};
+
+const showRenameColumn = (column) => {
+  renameColumnField.value = column.field;
+  renameColumnName.value = column.headerName;
+
+  if (renameColumnModal) {
+    renameColumnModal.show();
+  }
+};
+
+const confirmRenameColumn = () => {
+  if (!gridApi.value || !renameColumnName.value) return;
+
+  const colDef = gridApi.value.getColumnDef(renameColumnField.value);
+  if (colDef) {
+    colDef.headerName = renameColumnName.value;
+    gridApi.value.refreshHeader();
+
+    // Update in managedColumns
+    const managedCol = managedColumns.value.find(c => c.field === renameColumnField.value);
+    if (managedCol) {
+      managedCol.headerName = renameColumnName.value;
+    }
+
+    saveColumnState();
+  }
+
+  if (renameColumnModal) {
+    renameColumnModal.hide();
+  }
+};
+
+const showAllColumns = () => {
+  if (!gridApi.value) return;
+
+  managedColumns.value.forEach(col => {
+    col.visible = true;
+  });
+
+  const columnState = managedColumns.value.map(col => ({
+    colId: col.field,
+    hide: false
+  }));
+
+  gridApi.value.applyColumnState({
+    state: columnState,
+    defaultState: { hide: false }
+  });
+
+  saveColumnState();
+};
+
+const resetColumnSettings = async () => {
+  try {
+    if (!gridApi.value) return;
+
+    // Clear saved column state
+    await api.columnStates.delete('catalogueColumnState');
+
+    // Reset grid to default column state
+    gridApi.value.resetColumnState();
+
+    // Reload the modal with current state
+    openColumnPanel();
+
+  } catch (err) {
+    console.error('Error resetting column settings:', err);
+  }
+};
+
+const saveColumnState = async () => {
+  if (!gridApi.value) return;
+
+  try {
+    const columnState = gridApi.value.getColumnState();
+    await api.columnStates.save({
+      tabName: 'catalogueColumnState',
+      state: columnState
+    });
+  } catch (err) {
+    console.error('Error saving column state:', err);
+  }
+};
+
+const loadColumnState = async () => {
+  if (!gridApi.value) return;
+
+  try {
+    const response = await api.columnStates.get('catalogueColumnState');
+    if (response?.success && response.data) {
+      gridApi.value.applyColumnState({
+        state: response.data,
+        applyOrder: true
+      });
+    }
+  } catch (err) {
+    console.error('Error loading column state:', err);
   }
 };
 
@@ -546,6 +817,14 @@ onMounted(() => {
   loadPageSize();
   loadCostCentres();
 
+  // Initialize modals
+  if (columnManagementModalRef.value) {
+    columnManagementModal = new Modal(columnManagementModalRef.value);
+  }
+  if (renameColumnModalRef.value) {
+    renameColumnModal = new Modal(renameColumnModalRef.value);
+  }
+
   // Listen for preference updates
   window.addEventListener('preferencesUpdated', (event) => {
     if (event.detail?.itemsPerPage) {
@@ -570,6 +849,15 @@ watch(pageSize, () => {
 <style scoped>
 .catalogue-tab {
   background-color: var(--bg-primary);
+}
+
+/* Header action buttons */
+.col-md-7 > div > .btn {
+  margin-left: 0.75rem !important;
+}
+
+.col-md-7 > div > .btn:first-child {
+  margin-left: 0 !important;
 }
 
 /* Action buttons in cells */
@@ -617,5 +905,68 @@ watch(pageSize, () => {
 /* Ensure grid fills container */
 .ag-theme-quartz {
   --ag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Dark mode modal styling */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+  border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .list-group-item {
+  --bs-list-group-bg: var(--bg-primary);
+  --bs-list-group-color: var(--text-primary);
+  --bs-list-group-border-color: var(--border-color);
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .list-group {
+  --bs-list-group-bg: var(--bg-primary);
+  --bs-list-group-border-color: var(--border-color);
+}
+
+/* Dark mode AG Grid tool panel styling */
+[data-theme="dark"] .ag-side-bar {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ag-input-field-input,
+[data-theme="dark"] .ag-text-field-input {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .ag-select {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .ag-picker-field-wrapper {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .ag-list-item {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ag-column-select-header {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
 }
 </style>

@@ -4,7 +4,7 @@
     <div class="py-3 px-4 border-bottom">
       <!-- Search Bar and Actions -->
       <div class="row mb-3 align-items-center">
-        <div class="col-md-3">
+        <div class="col-md-4">
           <div class="input-group">
             <span class="input-group-text">
               <i class="bi bi-search"></i>
@@ -36,53 +36,54 @@
             @change="onFilterChange"
           />
         </div>
-        <div class="col-md-7 d-flex justify-content-end align-items-center gap-2">
-          <!-- Show Archived Toggle -->
-          <div class="form-check">
+        <div class="col-md-6">
+          <div class="d-flex justify-content-end align-items-center gap-2">
+            <!-- Show Archived Toggle -->
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="showArchivedRecipesCheckbox"
+                v-model="showArchived"
+                @change="onShowArchivedChange"
+              />
+              <label class="form-check-label" for="showArchivedRecipesCheckbox">
+                Show Archived
+              </label>
+            </div>
+
+            <!-- Date Range Pickers -->
             <input
-              class="form-check-input"
-              type="checkbox"
-              id="showArchivedRecipesCheckbox"
-              v-model="showArchived"
-              @change="onShowArchivedChange"
+              type="date"
+              class="form-control form-control-sm"
+              style="width: 150px;"
+              v-model="dateFrom"
+              @blur="onDateRangeChange"
+              placeholder="From Date"
+              title="Price Date From"
             />
-            <label class="form-check-label" for="showArchivedRecipesCheckbox">
-              Show Archived
-            </label>
-          </div>
-
-          <!-- Date Range Pickers -->
-          <input
-            type="date"
-            class="form-control form-control-sm"
-            style="width: 150px;"
-            v-model="dateFrom"
-            @blur="onDateRangeChange"
-            placeholder="From Date"
-            title="Price Date From"
-          />
-          <input
-            type="date"
-            class="form-control form-control-sm"
-            style="width: 150px;"
-            v-model="dateTo"
-            @blur="onDateRangeChange"
-            placeholder="To Date"
-            title="Price Date To"
-          />
-          <button
-            v-if="dateFrom || dateTo"
-            class="btn btn-sm btn-outline-secondary"
-            @click="clearDateFilter"
-            title="Clear Date Filter"
-          >
-            <i class="bi bi-x-circle"></i>
-          </button>
-
-          <!-- Action Buttons -->
-          <div class="btn-group">
+            <input
+              type="date"
+              class="form-control form-control-sm"
+              style="width: 150px;"
+              v-model="dateTo"
+              @blur="onDateRangeChange"
+              placeholder="To Date"
+              title="Price Date To"
+            />
             <button
-              class="btn btn-sm"
+              v-if="dateFrom || dateTo"
+              class="btn btn-sm btn-outline-secondary"
+              @click="clearDateFilter"
+              title="Clear Date Filter"
+            >
+              <i class="bi bi-x-circle"></i>
+            </button>
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-end align-items-center gap-3">
+            <button
+              class="btn"
               :class="isExpanded ? 'btn-outline-secondary' : 'btn-outline-primary'"
               @click="toggleExpandCollapse"
               :title="isExpanded ? 'Collapse All Recipes' : 'Expand All Recipes'"
@@ -90,7 +91,7 @@
               <i :class="isExpanded ? 'bi bi-arrows-collapse' : 'bi bi-arrows-expand'"></i>
             </button>
             <button
-              class="btn btn-sm"
+              class="btn"
               :class="showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
               @click="toggleArchivedFilter"
               title="Filter: Show only recipes with archived ingredients"
@@ -98,14 +99,14 @@
               <i class="bi bi-exclamation-triangle"></i>
             </button>
             <button
-              class="btn btn-sm btn-outline-secondary"
+              class="btn btn-outline-secondary"
               @click="selectAllFiltered"
               title="Select All Filtered Recipes"
             >
               <i class="bi bi-check-square"></i>
             </button>
             <button
-              class="btn btn-sm btn-outline-primary"
+              class="btn btn-outline-primary"
               @click="handleAddToFavourites"
               :disabled="selectedRows.length === 0"
               title="Add Selected to Favourites"
@@ -113,7 +114,7 @@
               <i class="bi bi-star"></i>
             </button>
             <button
-              class="btn btn-sm btn-outline-success"
+              class="btn btn-outline-success"
               @click="handleAddToTemplate"
               :disabled="selectedRows.length === 0"
               title="Add Selected to Template"
@@ -121,7 +122,7 @@
               <i class="bi bi-plus-circle"></i>
             </button>
             <button
-              class="btn btn-sm btn-warning"
+              class="btn btn-warning"
               @click="handleSendToZzTakeoff"
               :disabled="selectedRows.length === 0"
               title="Send Selected to zzTakeoff"
@@ -129,26 +130,27 @@
               <i class="bi bi-send"></i>
             </button>
             <button
-              class="btn btn-sm btn-outline-info"
-              @click="handleExportToCsv"
-              title="Export All to CSV"
-            >
-              <i class="bi bi-download"></i>
-            </button>
-            <button
-              class="btn btn-sm btn-outline-secondary"
+              class="btn btn-outline-secondary"
               @click="openColumnPanel"
-              title="Column Settings - Show/Hide, Reorder, Rename Columns"
+              title="Manage Columns"
             >
-              <i class="bi bi-sliders"></i>
+              <i class="bi bi-layout-three-columns"></i>
             </button>
             <button
-              class="btn btn-sm btn-outline-danger"
+              class="btn btn-outline-info"
+              @click="handleExportToCsv"
+              title="Export to Excel"
+            >
+              <i class="bi bi-file-earmark-excel"></i>
+            </button>
+            <button
+              class="btn btn-outline-danger"
               @click="clearAllFilters"
               title="Clear All Column Filters"
             >
               <i class="bi bi-funnel-fill"></i>
             </button>
+          </div>
           </div>
         </div>
       </div>
@@ -1647,5 +1649,25 @@ watch(pageSize, () => {
 
 [data-theme="dark"] .custom-grid-footer .text-muted {
   color: var(--text-secondary) !important;
+}
+
+/* Dark mode modal styling */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+  border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .list-group-item {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 </style>

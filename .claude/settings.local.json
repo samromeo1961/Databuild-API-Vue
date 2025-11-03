@@ -27,7 +27,15 @@
       "mcp__chrome-devtools__click",
       "mcp__chrome-devtools__take_screenshot",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: DBx Connector Vue - Electron Desktop App\n\nElectron desktop application for Databuild SQL Server database management with Vue 3 + AG Grid interface.\n\nFeatures:\n- Catalogue management with inline editing (Description, Unit, Price)\n- Archive/unarchive functionality for Catalogue and Recipes\n- Recipe management with sub-items\n- Supplier management\n- Contact management\n- Template system\n- Favourites and Recents tracking\n- zzTakeoff integration\n- Column state persistence\n- Dark mode support\n- Date filtering for prices\n\nTech Stack:\n- Backend: Electron, Node.js, mssql\n- Frontend: Vue 3, Vue Router, Vite\n- UI: Bootstrap 5, AG Grid Community, Bootstrap Icons\n- Storage: electron-store\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(gh:*)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(npm run build:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(yarn --version:*)",
+      "mcp__chrome-devtools__evaluate_script"
     ],
     "deny": [],
     "ask": []

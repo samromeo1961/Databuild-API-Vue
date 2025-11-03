@@ -43,19 +43,26 @@ async function getSupplierGroups(event, params) {
  */
 async function getSuppliersList(event, params) {
   try {
-    const { search, suppGroup, limit = 100, offset = 0 } = params;
+    console.log('[DEBUG] getSuppliersList called with params:', params);
 
     const pool = getPool();
     if (!pool) {
       throw new Error('Database connection not available');
     }
 
+    const { search, suppGroup, showArchived, limit = 100, offset = 0 } = params;
+
     // Build WHERE clause
     let whereConditions = [
       'S.SuppGroup < 3',
-      'S.Archived = 0',
       '(S.SupplierName IS NOT NULL AND S.SupplierName != \'\')'
     ];
+
+    // Only filter out archived if showArchived is not true
+    if (!showArchived) {
+      whereConditions.push('S.Archived = 0');
+    }
+
     const request = pool.request();
 
     // Add supplier group filter
@@ -97,6 +104,7 @@ async function getSuppliersList(event, params) {
 
     const query = `
       SELECT
+        S.Supplier_Code,
         S.Supplier_Code AS ShortName,
         S.SupplierName,
         S.ACN,
@@ -109,11 +117,12 @@ async function getSuppliersList(event, params) {
         S.AccountEmail,
         S.AccountPhone,
         S.AccountMobile,
+        S.Archived,
         SG.GroupName AS SupplierGroupName
-      FROM Supplier S
+      FROM [T_Esys].[dbo].[Supplier] S
       LEFT JOIN [T_Esys].[dbo].[SupplierGroup] SG ON S.SuppGroup = SG.GroupNumber
       ${whereClause}
-      ORDER BY S.SupplierName
+      ORDER BY S.Supplier_Code
       OFFSET @offset ROWS
       FETCH NEXT @limit ROWS ONLY
     `;
@@ -121,10 +130,13 @@ async function getSuppliersList(event, params) {
     request.input('offset', parseInt(offset));
     request.input('limit', parseInt(limit));
 
+    console.log('[DEBUG] Executing query:', query);
+    console.log('[DEBUG] Where clause:', whereClause);
+
     // Count query
     const countQuery = `
       SELECT COUNT(*) AS total
-      FROM Supplier S
+      FROM [T_Esys].[dbo].[Supplier] S
       ${whereClause}
     `;
 
@@ -156,6 +168,10 @@ async function getSuppliersList(event, params) {
       countRequest.query(countQuery)
     ]);
 
+    console.log('[DEBUG] Query returned', result.recordset.length, 'rows');
+    console.log('[DEBUG] Sample row:', result.recordset[0]);
+    console.log('[DEBUG] Total count:', countResult.recordset[0]?.total);
+
     return {
       success: true,
       total: countResult.recordset[0]?.total || 0,
@@ -175,7 +191,101 @@ async function getSuppliersList(event, params) {
   }
 }
 
+/**
+ * Archive/Unarchive a supplier
+ * IPC Handler: 'suppliers:archive'
+ */
+async function archiveSupplier(event, params) {
+  try {
+    const { supplierCode, archived } = params;
+
+    if (!supplierCode) {
+      throw new Error('Supplier code is required');
+    }
+
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    const query = `
+      UPDATE [T_Esys].[dbo].[Supplier]
+      SET Archived = @archived
+      WHERE Supplier_Code = @supplierCode
+    `;
+
+    const request = pool.request();
+    request.input('supplierCode', supplierCode);
+    request.input('archived', archived ? 1 : 0);
+
+    await request.query(query);
+
+    return {
+      success: true,
+      message: `Supplier ${archived ? 'archived' : 'unarchived'} successfully`
+    };
+
+  } catch (err) {
+    console.error('Error archiving supplier:', err);
+    return {
+      success: false,
+      error: 'Failed to archive supplier',
+      message: err.message
+    };
+  }
+}
+
+/**
+ * Update supplier group
+ * IPC Handler: 'suppliers:update-group'
+ */
+async function updateSupplierGroup(event, params) {
+  try {
+    const { supplierCode, suppGroup } = params;
+
+    if (!supplierCode) {
+      throw new Error('Supplier code is required');
+    }
+
+    if (suppGroup === undefined || suppGroup === null) {
+      throw new Error('Supplier group is required');
+    }
+
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    const query = `
+      UPDATE [T_Esys].[dbo].[Supplier]
+      SET SuppGroup = @suppGroup
+      WHERE Supplier_Code = @supplierCode
+    `;
+
+    const request = pool.request();
+    request.input('supplierCode', supplierCode);
+    request.input('suppGroup', parseInt(suppGroup));
+
+    await request.query(query);
+
+    return {
+      success: true,
+      message: 'Supplier group updated successfully'
+    };
+
+  } catch (err) {
+    console.error('Error updating supplier group:', err);
+    return {
+      success: false,
+      error: 'Failed to update supplier group',
+      message: err.message
+    };
+  }
+}
+
 module.exports = {
   getSupplierGroups,
-  getSuppliersList
+  getSuppliersList,
+  archiveSupplier,
+  updateSupplierGroup
 };

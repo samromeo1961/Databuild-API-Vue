@@ -242,6 +242,8 @@ ipcMain.handle('recipes:update-recipe', recipesHandlers.updateRecipe);
 
 ipcMain.handle('suppliers:get-groups', suppliersHandlers.getSupplierGroups);
 ipcMain.handle('suppliers:get-list', suppliersHandlers.getSuppliersList);
+ipcMain.handle('suppliers:archive', suppliersHandlers.archiveSupplier);
+ipcMain.handle('suppliers:update-group', suppliersHandlers.updateSupplierGroup);
 
 // ============================================================
 // IPC Handlers for Preferences

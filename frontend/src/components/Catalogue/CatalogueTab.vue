@@ -80,7 +80,7 @@
           </button>
 
           <!-- Action Buttons -->
-          <div class="btn-group">
+          <div class="d-flex justify-content-end align-items-center gap-3">
             <button
               class="btn btn-sm btn-outline-secondary"
               @click="selectAllFiltered"
@@ -122,9 +122,9 @@
             <button
               class="btn btn-sm btn-outline-secondary"
               @click="toggleColumnPanel"
-              title="Column Settings - Show/Hide, Reorder, Rename Columns"
+              title="Manage Columns"
             >
-              <i class="bi bi-sliders"></i>
+              <i class="bi bi-layout-three-columns"></i>
             </button>
             <button
               class="btn btn-sm btn-outline-danger"
@@ -260,7 +260,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="columnManagementModalLabel">
-              <i class="bi bi-sliders me-2"></i>Column Settings
+              <i class="bi bi-layout-three-columns me-2"></i>Column Settings
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
@@ -1801,6 +1801,12 @@ watch(pageSize, () => {
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-footer {
   border-color: var(--border-color);
+}
+
+[data-theme="dark"] .list-group-item {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 /* Dark mode footer styling */

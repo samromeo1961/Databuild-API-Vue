@@ -356,6 +356,16 @@ Each store has:
 - Rename (alias) via custom modal
 - State persisted per-tab in electron-store
 
+**IMPORTANT - Column State Persistence:**
+ANY change made in the Column Selector (Column Management Modal) MUST persist by saving to electron-store, as implemented on Catalogue and Recipe tabs. This includes:
+- Column visibility (show/hide)
+- Column order (reordering)
+- Column pinning (pin left/right/none)
+- Column width
+- Column aliases (custom names)
+
+All changes should be automatically saved to `column-states.json` via the `column-states` IPC handlers and restored on tab load.
+
 **Dark Mode Support:**
 AG Grid uses `ag-theme-quartz` or `ag-theme-quartz-dark` class based on theme state provided by App.vue.
 

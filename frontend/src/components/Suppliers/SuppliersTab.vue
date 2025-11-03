@@ -2,24 +2,10 @@
   <div class="suppliers-tab h-100 d-flex flex-column">
     <!-- Header and Search -->
     <div class="py-3 px-4 border-bottom">
-      <div class="row align-items-center mb-3">
-        <div class="col">
-          <h4 class="mb-0">
-            <i class="bi bi-people text-primary me-2"></i>
-            Suppliers
-          </h4>
-        </div>
-        <div class="col-auto">
-          <span class="text-muted">
-            {{ totalSize.toLocaleString() }} suppliers
-            <span v-if="selectedRows.length > 0"> • {{ selectedRows.length }} selected</span>
-          </span>
-        </div>
-      </div>
 
       <!-- Search and Filters -->
-      <div class="row mb-3">
-        <div class="col-md-5">
+      <div class="row mb-3 align-items-center">
+        <div class="col-md-4">
           <div class="input-group">
             <span class="input-group-text">
               <i class="bi bi-search"></i>
@@ -40,7 +26,7 @@
             </button>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-2">
           <!-- Supplier Group Multi-Select Dropdown -->
           <div class="dropdown w-100">
             <button
@@ -54,25 +40,65 @@
                 {{ selectedGroupsDisplay }}
               </span>
             </button>
-            <ul class="dropdown-menu w-100" style="max-height: 300px; overflow-y: auto;">
-              <li v-if="filteredSupplierGroups.length === 0" class="px-3 py-2">
-                <span class="text-muted small">No supplier groups available</span>
-              </li>
-              <li v-for="group in filteredSupplierGroups" :key="group.GroupNumber" class="px-3">
-                <div class="form-check">
+            <ul class="dropdown-menu w-100" style="max-height: 350px; overflow-y: auto;">
+              <!-- Search input -->
+              <li class="px-3 py-2" @click.stop>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                  </span>
                   <input
-                    class="form-check-input"
-                    type="checkbox"
-                    :id="`group-${group.GroupNumber}`"
-                    :value="group.GroupNumber"
-                    :checked="selectedGroups.includes(group.GroupNumber)"
-                    @change="handleGroupToggle(group.GroupNumber)"
+                    type="text"
+                    class="form-control form-control-sm"
+                    placeholder="Search groups..."
+                    v-model="groupSearchTerm"
+                    @click.stop
                   />
-                  <label class="form-check-label" :for="`group-${group.GroupNumber}`">
-                    {{ group.GroupNumber }} - {{ group.GroupName }}
-                  </label>
+                  <button
+                    v-if="groupSearchTerm"
+                    class="btn btn-outline-secondary btn-sm"
+                    @click.stop="groupSearchTerm = ''"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
                 </div>
               </li>
+              <li><hr class="dropdown-divider my-1" /></li>
+
+              <!-- Group list -->
+              <template v-if="!groupsLoaded">
+                <li class="px-3 py-2">
+                  <span class="text-muted small">
+                    <i class="bi bi-hourglass-split me-1"></i>Loading groups...
+                  </span>
+                </li>
+              </template>
+              <template v-else-if="displayedSupplierGroups.length === 0">
+                <li class="px-3 py-2">
+                  <span class="text-muted small">
+                    {{ groupSearchTerm ? 'No groups match your search' : 'No supplier groups available' }}
+                  </span>
+                </li>
+              </template>
+              <template v-else>
+                <li v-for="group in displayedSupplierGroups" :key="group.GroupNumber" class="px-3">
+                  <div class="form-check">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      :id="`group-${group.GroupNumber}`"
+                      :value="group.GroupNumber"
+                      :checked="selectedGroups.includes(group.GroupNumber)"
+                      @change="handleGroupToggle(group.GroupNumber)"
+                    />
+                    <label class="form-check-label" :for="`group-${group.GroupNumber}`">
+                      {{ group.GroupNumber }} - {{ group.GroupName }}
+                    </label>
+                  </div>
+                </li>
+              </template>
+
+              <!-- Clear selection -->
               <li v-if="selectedGroups.length > 0">
                 <hr class="dropdown-divider" />
               </li>
@@ -85,14 +111,36 @@
             </ul>
           </div>
         </div>
-        <div class="col-md-3">
-          <div class="btn-group w-100">
+        <div class="col-md-6 d-flex justify-content-end align-items-center gap-2">
+          <!-- Show Archived Toggle -->
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="showArchived"
+              v-model="showArchived"
+              @change="loadData"
+            />
+            <label class="form-check-label" for="showArchived">
+              Show Archived
+            </label>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="d-flex justify-content-end align-items-center gap-3">
             <button
               class="btn btn-success"
               @click="handleAddContact"
               title="Add New Contact"
             >
-              <i class="bi bi-person-plus"></i> Add
+              <i class="bi bi-person-plus"></i>
+            </button>
+            <button
+              class="btn btn-outline-secondary"
+              @click="openColumnPanel"
+              title="Manage Columns"
+            >
+              <i class="bi bi-layout-three-columns"></i>
             </button>
             <button
               class="btn btn-outline-primary"
@@ -107,6 +155,13 @@
               title="Export to Excel"
             >
               <i class="bi bi-file-earmark-excel"></i>
+            </button>
+            <button
+              class="btn btn-outline-danger"
+              @click="clearAllFilters"
+              title="Clear All Column Filters"
+            >
+              <i class="bi bi-funnel-fill"></i>
             </button>
           </div>
         </div>
@@ -125,7 +180,7 @@
     </div>
 
     <!-- AG Grid -->
-    <div class="flex-grow-1 position-relative">
+    <div class="flex-grow-1 position-relative grid-with-status">
       <ag-grid-vue
         class="ag-theme-quartz h-100"
         :class="{ 'ag-theme-quartz-dark': isDarkMode }"
@@ -138,10 +193,172 @@
         :paginationPageSizeSelector="pageSizeOptions"
         :rowSelection="rowSelectionConfig"
         :loading="loading"
+        :sideBar="sideBar"
+        :getRowClass="getRowClass"
         @grid-ready="onGridReady"
         @selection-changed="onSelectionChanged"
         @sort-changed="onSortChanged"
       />
+
+      <!-- Custom footer info overlaid on AG Grid pagination -->
+      <div class="custom-grid-footer">
+        <span class="text-muted small">
+          <i class="bi bi-building me-1"></i>
+          Total: <strong>{{ totalSize.toLocaleString() }}</strong> suppliers
+        </span>
+        <span v-if="selectedRows.length > 0" class="text-primary small ms-3">
+          <i class="bi bi-check2-square me-1"></i>
+          {{ selectedRows.length }} selected
+        </span>
+      </div>
+    </div>
+
+    <!-- Column Management Modal -->
+    <div
+      class="modal fade"
+      id="columnManagementModal"
+      tabindex="-1"
+      aria-labelledby="columnManagementModalLabel"
+      aria-hidden="true"
+      ref="columnManagementModalRef"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="columnManagementModalLabel">
+              <i class="bi bi-layout-three-columns me-2"></i>Column Settings
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row mb-3">
+              <div class="col">
+                <p class="text-muted mb-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Drag to reorder, check to show/hide, or use pin buttons. Changes are saved automatically.
+                </p>
+              </div>
+            </div>
+
+            <draggable
+              v-model="managedColumns"
+              item-key="field"
+              @end="onColumnReorder"
+              handle=".drag-handle"
+              class="list-group"
+            >
+              <template #item="{element: col}">
+                <div class="list-group-item d-flex align-items-center">
+                  <div class="drag-handle me-2" style="cursor: move;">
+                    <i class="bi bi-grip-vertical text-muted"></i>
+                  </div>
+                  <div class="form-check me-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      :id="`col-${col.field}`"
+                      v-model="col.visible"
+                      @change="toggleColumnVisibility(col)"
+                    />
+                  </div>
+                  <div class="flex-grow-1">
+                    <label :for="`col-${col.field}`" class="mb-0 fw-medium">
+                      {{ col.headerName }}
+                      <span v-if="col.pinned" class="badge bg-primary ms-2">
+                        <i class="bi bi-pin-angle-fill"></i> {{ col.pinned }}
+                      </span>
+                    </label>
+                    <small class="d-block text-muted">{{ col.field }}</small>
+                  </div>
+                  <div class="btn-group btn-group-sm me-2">
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': col.pinned === 'left' }"
+                      @click="pinColumn(col, 'left')"
+                      title="Pin Left"
+                    >
+                      <i class="bi bi-pin-angle"></i> Left
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': !col.pinned }"
+                      @click="pinColumn(col, null)"
+                      title="Unpin"
+                    >
+                      <i class="bi bi-dash-circle"></i>
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
+                      :class="{ 'active': col.pinned === 'right' }"
+                      @click="pinColumn(col, 'right')"
+                      title="Pin Right"
+                    >
+                      <i class="bi bi-pin-angle"></i> Right
+                    </button>
+                  </div>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    @click="showRenameColumn(col)"
+                    title="Rename column"
+                  >
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                </div>
+              </template>
+            </draggable>
+
+            <div class="mt-3 d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" @click="showAllColumns">
+                <i class="bi bi-eye me-1"></i>Show All
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" @click="resetColumnSettings">
+                <i class="bi bi-arrow-clockwise me-1"></i>Reset to Default
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rename Column Modal -->
+    <div
+      class="modal fade"
+      id="renameColumnModal"
+      tabindex="-1"
+      aria-labelledby="renameColumnModalLabel"
+      aria-hidden="true"
+      ref="renameColumnModalRef"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="renameColumnModalLabel">Rename Column</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="columnNewName" class="form-label">Column Name</label>
+              <input
+                type="text"
+                id="columnNewName"
+                class="form-control"
+                v-model="renameColumnName"
+                placeholder="Enter column name..."
+              />
+              <small class="text-muted">Field: {{ renameColumnField }}</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" @click="confirmRenameColumn">
+              <i class="bi bi-check-lg me-1"></i>Rename
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -150,6 +367,8 @@
 import { ref, computed, onMounted, watch, inject } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { Modal } from 'bootstrap';
+import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -171,6 +390,19 @@ const sortOrder = ref('asc');
 // Supplier group filtering
 const filteredSupplierGroups = ref([]);
 const selectedGroups = ref([]);
+const showArchived = ref(false);
+const allSupplierGroups = ref([]);  // Store all groups for dropdown
+const groupSearchTerm = ref('');  // Search term for group dropdown
+const groupsLoaded = ref(false);  // Track if groups have been loaded
+
+// Column Management Modal
+const columnManagementModalRef = ref(null);
+const renameColumnModalRef = ref(null);
+let columnManagementModal = null;
+let renameColumnModal = null;
+const managedColumns = ref([]);
+const renameColumnField = ref('');
+const renameColumnName = ref('');
 
 // Check if dark mode
 const isDarkMode = computed(() => {
@@ -182,11 +414,36 @@ const selectedGroupsDisplay = computed(() => {
   if (selectedGroups.value.length === 0) {
     return 'All Supplier Groups';
   } else if (selectedGroups.value.length === 1) {
-    const group = filteredSupplierGroups.value.find(g => g.GroupNumber === selectedGroups.value[0]);
+    const group = allSupplierGroups.value.find(g => g.GroupNumber === selectedGroups.value[0]);
     return group ? `${group.GroupNumber} - ${group.GroupName}` : 'Selected (1)';
   } else {
     return `Selected (${selectedGroups.value.length})`;
   }
+});
+
+// Filtered groups based on search term (shows ALL groups in dropdown)
+const displayedSupplierGroups = computed(() => {
+  console.log('[FRONTEND] displayedSupplierGroups computed called');
+  console.log('[FRONTEND] allSupplierGroups.value:', allSupplierGroups.value);
+  console.log('[FRONTEND] groupSearchTerm.value:', groupSearchTerm.value);
+
+  // Use allSupplierGroups to show ALL available groups in dropdown
+  const groupsToDisplay = allSupplierGroups.value;
+  console.log('[FRONTEND] groupsToDisplay:', groupsToDisplay);
+
+  if (!groupSearchTerm.value) {
+    console.log('[FRONTEND] No search term, returning all groups:', groupsToDisplay);
+    return groupsToDisplay;
+  }
+
+  const searchLower = groupSearchTerm.value.toLowerCase();
+  const filtered = groupsToDisplay.filter(group => {
+    const groupNumber = group.GroupNumber.toString().toLowerCase();
+    const groupName = (group.GroupName || '').toLowerCase();
+    return groupNumber.includes(searchLower) || groupName.includes(searchLower);
+  });
+  console.log('[FRONTEND] Filtered groups:', filtered);
+  return filtered;
 });
 
 // Row selection configuration (new v32+ API)
@@ -200,7 +457,7 @@ const rowSelectionConfig = {
 // AG Grid column definitions
 const columnDefs = ref([
   {
-    field: 'SupplierCode',
+    field: 'ShortName',
     headerName: 'Supplier Code',
     width: 120,
     pinned: 'left',
@@ -211,16 +468,26 @@ const columnDefs = ref([
     field: 'SupplierName',
     headerName: 'Supplier Name',
     flex: 1,
-    minWidth: 200,
+    minWidth: 220,
     filter: 'agTextColumnFilter',
     sortable: true
   },
   {
     field: 'SupplierGroupName',
     headerName: 'Group',
-    width: 130,
+    width: 180,
     filter: 'agTextColumnFilter',
-    sortable: true
+    sortable: true,
+    editable: true,
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: []  // Will be populated dynamically
+    },
+    onCellValueChanged: async (params) => {
+      if (params.newValue !== params.oldValue) {
+        await handleGroupChange(params);
+      }
+    }
   },
   {
     field: 'ACN',
@@ -230,21 +497,33 @@ const columnDefs = ref([
     sortable: true
   },
   {
-    field: 'Address',
+    field: 'AccountAddress',
     headerName: 'Address',
-    width: 180,
+    width: 250,
     filter: 'agTextColumnFilter',
     sortable: true
   },
   {
-    field: 'Phone',
-    headerName: 'Phone',
+    field: 'AccountCity',
+    headerName: 'City',
     width: 130,
     filter: 'agTextColumnFilter',
     sortable: true
   },
   {
-    field: 'Email',
+    field: 'AccountPhone',
+    headerName: 'Phone',
+    width: 130,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    cellRenderer: (params) => {
+      if (!params.value) return '-';
+      const phoneNumber = params.value.toString().replace(/\s+/g, '');
+      return `<a href="tel:${phoneNumber}" class="text-primary" title="Click to call"><i class="bi bi-telephone me-1"></i>${params.value}</a>`;
+    }
+  },
+  {
+    field: 'AccountEmail',
     headerName: 'Email',
     width: 180,
     filter: 'agTextColumnFilter',
@@ -255,7 +534,7 @@ const columnDefs = ref([
     }
   },
   {
-    field: 'ContactPerson',
+    field: 'AccountContact',
     headerName: 'Contact Person',
     width: 150,
     filter: 'agTextColumnFilter',
@@ -264,11 +543,24 @@ const columnDefs = ref([
   {
     field: 'actions',
     headerName: 'Actions',
-    width: 100,
+    width: 230,
+    pinned: 'right',
     cellRenderer: (params) => {
-      return `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-supplier-code="${params.data.SupplierCode}">
-                <i class="bi bi-pencil me-1"></i>Edit
-              </button>`;
+      const isArchived = params.data.Archived;
+      const archiveBtn = isArchived
+        ? `<button class="btn btn-sm btn-outline-success me-1" data-action="unarchive" data-supplier-code="${params.data.Supplier_Code}" title="Unarchive">
+             <i class="bi bi-arrow-counterclockwise"></i>
+           </button>`
+        : `<button class="btn btn-sm btn-outline-warning me-1" data-action="archive" data-supplier-code="${params.data.Supplier_Code}" title="Archive">
+             <i class="bi bi-archive"></i>
+           </button>`;
+
+      return `<div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary" data-action="edit" data-supplier-code="${params.data.Supplier_Code}" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                ${archiveBtn}
+              </div>`;
     },
     suppressHeaderMenuButton: true,
     sortable: false,
@@ -284,14 +576,54 @@ const defaultColDef = {
   floatingFilter: false
 };
 
+// Row class callback for styling archived suppliers
+const getRowClass = (params) => {
+  if (params.data && params.data.Archived) {
+    return 'archived-row';
+  }
+  return null;
+};
+
+// Side panel configuration for column management
+const sideBar = {
+  toolPanels: [
+    {
+      id: 'columns',
+      labelDefault: 'Columns',
+      labelKey: 'columns',
+      iconKey: 'columns',
+      toolPanel: 'agColumnsToolPanel',
+      toolPanelParams: {
+        suppressRowGroups: true,
+        suppressValues: true,
+        suppressPivots: true,
+        suppressPivotMode: true,
+        suppressColumnFilter: false,
+        suppressColumnSelectAll: false,
+        suppressColumnExpandAll: false
+      }
+    }
+  ],
+  defaultToolPanel: ''
+};
+
 // Debounce timer
 let searchDebounce = null;
 
 // Load supplier groups filtered by preferences
 const loadSupplierGroups = async (preferencesOverride = null) => {
   try {
+    console.log('[FRONTEND] loadSupplierGroups called');
     const response = await api.suppliers.getGroups();
-    const allGroups = response?.data || [];
+    console.log('[FRONTEND] Supplier groups response:', response);
+    const groups = response?.data || [];
+    console.log('[FRONTEND] Parsed groups:', groups);
+    console.log('[FRONTEND] Number of groups:', groups.length);
+
+    // Store all groups for dropdown
+    allSupplierGroups.value = groups;
+    groupsLoaded.value = true;  // Mark as loaded
+    console.log('[FRONTEND] allSupplierGroups.value set to:', allSupplierGroups.value);
 
     // Get user preferences and filter groups
     let prefs;
@@ -305,10 +637,16 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
     const selectedGroupNumbers = prefs.supplierSubGroups || [2]; // Default to group 2
 
     // Filter to only show groups selected in preferences
-    const filtered = allGroups.filter(group =>
+    const filtered = groups.filter(group =>
       selectedGroupNumbers.includes(group.GroupNumber)
     );
     filteredSupplierGroups.value = filtered;
+
+    // Update column def with group names for dropdown
+    const groupColumn = columnDefs.value.find(col => col.field === 'SupplierGroupName');
+    if (groupColumn && groupColumn.cellEditorParams) {
+      groupColumn.cellEditorParams.values = groups.map(g => `${g.GroupNumber} - ${g.GroupName}`);
+    }
   } catch (err) {
     console.error('Error loading supplier groups:', err);
   }
@@ -316,6 +654,7 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
 
 // Load data
 const loadData = async () => {
+  console.log('[FRONTEND] loadData called');
   loading.value = true;
   error.value = null;
 
@@ -323,7 +662,8 @@ const loadData = async () => {
     // Load ALL data - AG Grid will handle pagination client-side
     const params = {
       limit: 999999,
-      offset: 0
+      offset: 0,
+      showArchived: showArchived.value
     };
 
     if (searchTerm.value) {
@@ -339,11 +679,18 @@ const loadData = async () => {
       params.sortOrder = sortOrder.value;
     }
 
+    console.log('[FRONTEND] Calling api.suppliers.getList with params:', params);
+    console.log('[FRONTEND] api.suppliers:', api.suppliers);
     const response = await api.suppliers.getList(params);
+    console.log('[FRONTEND] Response received:', response);
+    console.log('[FRONTEND] Response.data length:', response?.data?.length);
+    console.log('[FRONTEND] First row of data:', response?.data?.[0]);
 
     if (response?.success) {
       rowData.value = response.data || [];
       totalSize.value = response.total || response.data.length;
+      console.log('[FRONTEND] rowData.value set to:', rowData.value.length, 'rows');
+      console.log('[FRONTEND] First row in rowData:', rowData.value[0]);
     } else {
       error.value = 'Failed to load suppliers';
     }
@@ -382,21 +729,111 @@ const handleGroupToggle = (groupNumber) => {
 // Clear group filter
 const clearGroupFilter = () => {
   selectedGroups.value = [];
+  groupSearchTerm.value = '';
   loadData();
+};
+
+// Handle archive/unarchive supplier
+const handleArchiveSupplier = async (supplierCode, archive) => {
+  try {
+    const response = await api.suppliers.archive({ supplierCode, archived: archive });
+
+    if (response?.success) {
+      success.value = response.message || `Supplier ${archive ? 'archived' : 'unarchived'} successfully`;
+      setTimeout(() => success.value = null, 3000);
+      loadData(); // Reload data
+    } else {
+      error.value = response?.message || 'Failed to archive supplier';
+    }
+  } catch (err) {
+    console.error('Error archiving supplier:', err);
+    error.value = 'Error archiving supplier';
+  }
+};
+
+// Handle supplier group change
+const handleGroupChange = async (params) => {
+  try {
+    const newGroupName = params.newValue;
+    const oldGroupName = params.oldValue;
+
+    // Parse group number from "GroupNumber - GroupName" format
+    const match = newGroupName.match(/^(\d+)\s*-/);
+    if (!match) {
+      error.value = 'Invalid group format';
+      return;
+    }
+
+    const suppGroup = parseInt(match[1]);
+    const supplierCode = params.data.Supplier_Code;
+
+    const response = await api.suppliers.updateGroup({ supplierCode, suppGroup });
+
+    if (response?.success) {
+      success.value = 'Supplier group updated successfully';
+      setTimeout(() => success.value = null, 3000);
+
+      // Update the SuppGroup in the row data
+      params.data.SuppGroup = suppGroup;
+    } else {
+      error.value = response?.message || 'Failed to update supplier group';
+      // Revert the change
+      params.data.SupplierGroupName = oldGroupName;
+      if (gridApi.value) {
+        gridApi.value.refreshCells({ rowNodes: [params.node], force: true });
+      }
+    }
+  } catch (err) {
+    console.error('Error updating supplier group:', err);
+    error.value = 'Error updating supplier group';
+    // Revert the change
+    params.data.SupplierGroupName = params.oldValue;
+    if (gridApi.value) {
+      gridApi.value.refreshCells({ rowNodes: [params.node], force: true });
+    }
+  }
 };
 
 // Grid ready handler
 const onGridReady = (params) => {
+  console.log('[FRONTEND] onGridReady called');
   gridApi.value = params.api;
 
   // Add click event listener for action buttons
   params.api.addEventListener('cellClicked', (event) => {
-    if (event.event.target.dataset.action === 'edit') {
+    const action = event.event.target.dataset.action || event.event.target.closest('[data-action]')?.dataset.action;
+    const supplierCode = event.event.target.dataset.supplierCode || event.event.target.closest('[data-supplier-code]')?.dataset.supplierCode;
+
+    if (action === 'edit') {
       handleEditSupplier(event.data);
+    } else if (action === 'archive') {
+      handleArchiveSupplier(supplierCode, true);
+    } else if (action === 'unarchive') {
+      handleArchiveSupplier(supplierCode, false);
     }
   });
 
+  // Add event listeners for column state changes (auto-save)
+  params.api.addEventListener('columnResized', (event) => {
+    if (event.finished) {
+      saveColumnState(event);
+    }
+  });
+  params.api.addEventListener('columnMoved', (event) => {
+    if (event.finished) {
+      saveColumnState(event);
+    }
+  });
+  params.api.addEventListener('columnVisible', saveColumnState);
+  params.api.addEventListener('columnPinned', saveColumnState);
+
+  console.log('[FRONTEND] Calling loadData from onGridReady');
   loadData();
+
+  // Load saved column state after data is loaded
+  setTimeout(() => {
+    loadColumnState();
+  }, 100);
 };
 
 // Selection changed handler
@@ -442,6 +879,296 @@ const handleExportToExcel = () => {
   }
 };
 
+// Clear all AG Grid column filters
+const clearAllFilters = () => {
+  if (gridApi.value) {
+    gridApi.value.setFilterModel(null);
+    success.value = 'All column filters cleared';
+    setTimeout(() => success.value = null, 2000);
+  }
+};
+
+// Open column panel modal
+const openColumnPanel = () => {
+  if (!gridApi.value) return;
+
+  console.log('[DEBUG] openColumnPanel called');
+
+  // Get current column state from grid
+  const columnState = gridApi.value.getColumnState();
+  console.log('[DEBUG] Current column state:', columnState);
+
+  // Build managed columns list based on current grid order
+  managedColumns.value = columnState
+    .filter(state => state.colId && state.colId !== 'actions' && state.colId !== 'ag-Grid-SelectionColumn')
+    .map(state => {
+      const colDef = gridApi.value.getColumnDef(state.colId);
+      return {
+        field: state.colId,
+        headerName: colDef?.headerName || state.colId,
+        visible: !state.hide,
+        pinned: state.pinned || null,
+        width: state.width || colDef?.width || 150
+      };
+    });
+
+  console.log('[DEBUG] Managed columns populated:', managedColumns.value);
+
+  if (columnManagementModal) {
+    columnManagementModal.show();
+  }
+};
+
+// Column reorder handler
+const onColumnReorder = () => {
+  if (!gridApi.value) return;
+
+  console.log('[DEBUG] onColumnReorder called');
+  console.log('[DEBUG] New column order:', managedColumns.value.map(c => c.field));
+
+  // Apply the new column order using applyColumnState
+  const newColumnState = managedColumns.value.map((col, index) => ({
+    colId: col.field,
+    sortIndex: index
+  }));
+
+  gridApi.value.applyColumnState({
+    state: newColumnState,
+    applyOrder: true
+  });
+
+  console.log('[DEBUG] Column order applied to grid');
+  saveColumnState();
+};
+
+// Toggle column visibility
+const toggleColumnVisibility = (column) => {
+  if (!gridApi.value) return;
+
+  gridApi.value.setColumnsVisible([column.field], column.visible);
+  saveColumnState();
+};
+
+// Pin column
+const pinColumn = (column, position) => {
+  if (!gridApi.value) return;
+
+  console.log('[DEBUG] pinColumn called for:', column.field, 'position:', position);
+
+  // Update the column object
+  column.pinned = position;
+
+  // Apply to grid using applyColumnState
+  gridApi.value.applyColumnState({
+    state: [{
+      colId: column.field,
+      pinned: position
+    }],
+    defaultState: { pinned: null }
+  });
+
+  console.log('[DEBUG] Column pinned in grid');
+
+  saveColumnState();
+
+  console.log('[DEBUG] Pin state saved');
+};
+
+// Show rename column modal
+const showRenameColumn = (column) => {
+  renameColumnField.value = column.field;
+  renameColumnName.value = column.headerName;
+
+  if (columnManagementModal) {
+    columnManagementModal.hide();
+  }
+
+  if (renameColumnModal) {
+    renameColumnModal.show();
+  }
+};
+
+// Confirm rename column
+const confirmRenameColumn = () => {
+  if (!gridApi.value || !renameColumnField.value) return;
+
+  // Find the column in managedColumns and update its name
+  const col = managedColumns.value.find(c => c.field === renameColumnField.value);
+  if (col) {
+    col.headerName = renameColumnName.value;
+  }
+
+  // Update the column definition in the grid
+  const colDef = gridApi.value.getColumnDef(renameColumnField.value);
+  if (colDef) {
+    colDef.headerName = renameColumnName.value;
+    gridApi.value.refreshHeader();
+  }
+
+  saveColumnState();
+
+  if (renameColumnModal) {
+    renameColumnModal.hide();
+  }
+
+  if (columnManagementModal) {
+    columnManagementModal.show();
+  }
+};
+
+// Show all columns
+const showAllColumns = () => {
+  if (!gridApi.value) return;
+
+  managedColumns.value.forEach(col => {
+    col.visible = true;
+  });
+
+  // Apply to grid using applyColumnState
+  const showAllState = managedColumns.value.map(col => ({
+    colId: col.field,
+    hide: false
+  }));
+
+  gridApi.value.applyColumnState({
+    state: showAllState
+  });
+
+  saveColumnState();
+};
+
+// Reset column settings
+const resetColumnSettings = async () => {
+  if (!gridApi.value) return;
+
+  // Delete saved state
+  await api.columnStates.delete('suppliers');
+
+  // Reset all columns to visible and unpinned
+  managedColumns.value.forEach(col => {
+    col.visible = true;
+    col.pinned = null;
+    col.headerName = col.field;  // Reset to original field name
+  });
+
+  // Apply to grid - reset all columns to visible and unpinned
+  const resetState = managedColumns.value.map(col => ({
+    colId: col.field,
+    hide: false,
+    pinned: null
+  }));
+
+  gridApi.value.applyColumnState({
+    state: resetState
+  });
+
+  // Refresh the grid
+  gridApi.value.refreshHeader();
+
+  success.value = 'Column settings reset to default';
+  setTimeout(() => success.value = null, 2000);
+};
+
+// Save column state to electron-store
+const saveColumnState = async (event) => {
+  if (!gridApi.value) return;
+
+  try {
+    const eventType = event?.type || 'manual';
+    console.log(`[DEBUG] saveColumnState: Starting save (triggered by: ${eventType})...`);
+
+    // Get current column state (order, width, visibility, pinned)
+    const columnState = gridApi.value.getColumnState();
+
+    // Save column header names (aliases)
+    const headerNames = {};
+    columnState.forEach(col => {
+      const colDef = gridApi.value.getColumnDef(col.colId);
+      if (colDef && colDef.headerName) {
+        headerNames[col.colId] = colDef.headerName;
+      }
+    });
+
+    console.log('[DEBUG] saveColumnState: Header names:', headerNames);
+
+    const dataToSave = {
+      tabName: 'suppliers',
+      columnState: JSON.stringify({
+        state: columnState,
+        headerNames
+      })
+    };
+
+    const result = await api.columnStates.save(dataToSave);
+    console.log(`[DEBUG] saveColumnState: Save result (${eventType}):`, result);
+  } catch (err) {
+    console.error('[DEBUG] Error saving column state:', err);
+  }
+};
+
+// Load column state from electron-store
+const loadColumnState = async () => {
+  console.log('[DEBUG] loadColumnState: Function called, gridApi.value:', !!gridApi.value);
+
+  if (!gridApi.value) {
+    console.log('[DEBUG] loadColumnState: No gridApi, returning early');
+    return;
+  }
+
+  try {
+    console.log('[DEBUG] loadColumnState: Starting load...');
+    console.log('[DEBUG] loadColumnState: API available:', !!api.columnStates);
+
+    const result = await api.columnStates.get('suppliers');
+    console.log('[DEBUG] loadColumnState: Get result:', result);
+
+    if (result && result.success && result.data && result.data.columnState) {
+      const savedData = JSON.parse(result.data.columnState);
+      console.log('[DEBUG] loadColumnState: Parsed saved data:', savedData);
+
+      // Apply column header names (aliases) FIRST - update the columnDefs ref
+      if (savedData.headerNames) {
+        console.log('[DEBUG] loadColumnState: Applying header names:', savedData.headerNames);
+
+        // Update the columnDefs ref directly
+        columnDefs.value.forEach(colDef => {
+          if (savedData.headerNames[colDef.field]) {
+            console.log(`[DEBUG] loadColumnState: Updating columnDefs ${colDef.field} to: ${savedData.headerNames[colDef.field]}`);
+            colDef.headerName = savedData.headerNames[colDef.field];
+          }
+        });
+
+        // Also update via grid API
+        Object.keys(savedData.headerNames).forEach(colId => {
+          const colDef = gridApi.value.getColumnDef(colId);
+          if (colDef) {
+            console.log(`[DEBUG] loadColumnState: Setting grid API ${colId} headerName to: ${savedData.headerNames[colId]}`);
+            colDef.headerName = savedData.headerNames[colId];
+          }
+        });
+
+        console.log('[DEBUG] loadColumnState: Refreshing headers...');
+        gridApi.value.refreshHeader();
+        console.log('[DEBUG] loadColumnState: Headers refreshed');
+      }
+
+      // Apply column state (order, width, visibility, pinned) AFTER header names
+      if (savedData.state) {
+        console.log('[DEBUG] loadColumnState: Applying column state...');
+        gridApi.value.applyColumnState({
+          state: savedData.state,
+          applyOrder: true
+        });
+        console.log('[DEBUG] loadColumnState: Column state applied');
+      }
+    } else {
+      console.log('[DEBUG] loadColumnState: No saved state found or invalid result');
+    }
+  } catch (err) {
+    console.error('[DEBUG] Error loading column state:', err);
+  }
+};
+
 // Load preferences to get page size
 const loadPageSize = async () => {
   try {
@@ -458,6 +1185,14 @@ const loadPageSize = async () => {
 onMounted(() => {
   loadPageSize();
   loadSupplierGroups();
+
+  // Initialize Bootstrap modals
+  if (columnManagementModalRef.value) {
+    columnManagementModal = new Modal(columnManagementModalRef.value);
+  }
+  if (renameColumnModalRef.value) {
+    renameColumnModal = new Modal(renameColumnModalRef.value);
+  }
 
   // Listen for preference updates
   window.addEventListener('preferencesUpdated', (event) => {
@@ -565,5 +1300,54 @@ watch(pageSize, () => {
 
 .btn.dropdown-toggle::after {
   margin-left: auto;
+}
+
+/* Custom footer overlay on AG Grid pagination */
+.custom-grid-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 10px 16px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .custom-grid-footer {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .custom-grid-footer .text-muted {
+  color: var(--text-secondary) !important;
+}
+
+/* Archived row styling */
+.ag-theme-quartz .archived-row {
+  color: #999 !important;
+  font-style: italic;
+}
+
+.ag-theme-quartz-dark .archived-row {
+  color: #666 !important;
+  font-style: italic;
+}
+
+/* Dark mode modal styling */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+  border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .list-group-item {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 </style>
