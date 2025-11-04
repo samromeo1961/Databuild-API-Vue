@@ -343,15 +343,21 @@
                         </tr>
                         <tr v-else v-for="unit in units" :key="unit.Code">
                           <td><strong>{{ unit.Code }}</strong></td>
-                          <td>{{ unit.Description }}</td>
+                          <td>{{ unit.Printout }}</td>
                           <td>
-                            <input
-                              type="text"
-                              class="form-control form-control-sm"
-                              :value="preferences.unitTakeoffMappings?.[unit.Code] || ''"
-                              @input="handleUnitMappingChange(unit.Code, $event.target.value)"
-                              placeholder="e.g., Area, Linear, Item"
-                            />
+                            <select
+                              class="form-select form-select-sm"
+                              :value="preferences.unitTakeoffMappings?.[unit.Printout] || preferences.unitTakeoffMappings?.[unit.Code] || ''"
+                              @change="handleUnitMappingChange(unit.Printout, $event.target.value)"
+                            >
+                              <option value="">None</option>
+                              <option value="area">Area</option>
+                              <option value="linear">Linear</option>
+                              <option value="count">Count</option>
+                              <option value="segment">Segment</option>
+                              <option value="part">Part</option>
+                              <option value="item">Item</option>
+                            </select>
                           </td>
                         </tr>
                       </tbody>
@@ -405,6 +411,102 @@
               </div>
             </div>
 
+            <!-- Application Settings -->
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#applicationSettings"
+                >
+                  <i class="bi bi-gear me-2"></i>
+                  Application Settings
+                </button>
+              </h2>
+              <div id="applicationSettings" class="accordion-collapse collapse" data-bs-parent="#preferencesAccordion">
+                <div class="accordion-body">
+                  <div class="mb-3">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="openExpanded"
+                        v-model="preferences.openExpanded"
+                      />
+                      <label class="form-check-label" for="openExpanded">
+                        Open application in expanded/maximized mode
+                      </label>
+                      <div class="form-text">
+                        Application will start in fullscreen mode on launch
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Default Tab on Opening</label>
+                    <select
+                      class="form-select"
+                      v-model="preferences.defaultTab"
+                    >
+                      <option value="/catalogue">Catalogue</option>
+                      <option value="/recipes">Recipes</option>
+                      <option value="/suppliers">Suppliers</option>
+                      <option value="/contacts">Contacts</option>
+                      <option value="/templates">Templates</option>
+                      <option value="/favourites">Favourites</option>
+                      <option value="/recents">Recents</option>
+                      <option value="/zztakeoff-web">zzTakeoff Web</option>
+                    </select>
+                    <div class="form-text">
+                      Choose which tab to display when the application starts
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- zzTakeoff Settings -->
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#zzTakeoffSettings"
+                >
+                  <i class="bi bi-box-arrow-in-right me-2"></i>
+                  zzTakeoff Settings
+                </button>
+              </h2>
+              <div id="zzTakeoffSettings" class="accordion-collapse collapse" data-bs-parent="#preferencesAccordion">
+                <div class="accordion-body">
+                  <div class="mb-3">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="persistZzTakeoffSession"
+                        v-model="preferences.persistZzTakeoffSession"
+                      />
+                      <label class="form-check-label" for="persistZzTakeoffSession">
+                        Keep me signed in to zzTakeoff.com
+                      </label>
+                      <div class="form-text">
+                        Your zzTakeoff session will persist between application restarts
+                      </div>
+                    </div>
+                  </div>
+                  <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <small>
+                      When enabled, you won't need to sign in to zzTakeoff.com each time you open the application.
+                      This uses browser session persistence for the embedded zzTakeoff Web view.
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -439,7 +541,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Modal } from 'bootstrap';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 
@@ -470,7 +572,12 @@ const preferences = ref({
   },
   unitTakeoffMappings: {},
   itemsPerPage: 50,
-  theme: 'light'
+  theme: 'light',
+  // Application Settings
+  openExpanded: false,
+  defaultTab: '/catalogue',
+  // zzTakeoff Settings
+  persistZzTakeoffSession: false
 });
 
 const loading = ref(false);
@@ -492,6 +599,13 @@ const originalDatabase = ref(null);
 // Show modal
 const show = () => {
   if (modalInstance) {
+    // Remove any stuck modal backdrops before showing
+    const stuckBackdrops = document.querySelectorAll('.modal-backdrop');
+    stuckBackdrops.forEach(backdrop => backdrop.remove());
+
+    // Remove modal-open class from body if it exists
+    document.body.classList.remove('modal-open');
+
     // Load fresh data when opening
     loadPreferences();
     loadUnits();
@@ -755,6 +869,13 @@ defineExpose({
 onMounted(() => {
   if (modalRef.value) {
     modalInstance = new Modal(modalRef.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (modalInstance) {
+    modalInstance.dispose();
+    modalInstance = null;
   }
 });
 </script>

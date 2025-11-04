@@ -156,9 +156,9 @@ async function getSupplierGroupsList(event, params) {
 
     const query = `
       SELECT
-        GroupNumber,
+        GroupNumber AS [Group],
         GroupName
-      FROM [T_Esys].[dbo].[SupplierGroup]
+      FROM SupplierGroup
       ORDER BY GroupNumber
     `;
 

@@ -2,8 +2,9 @@ const { app, BrowserWindow, BrowserView, ipcMain, dialog, Menu } = require('elec
 const path = require('path');
 const Store = require('electron-store');
 
-// Import database connection module
+// Import database connection modules
 const db = require('./src/database/connection');
+const localDb = require('./src/database/local-db');
 
 // Import IPC handlers
 const catalogueHandlers = require('./src/ipc-handlers/catalogue');
@@ -22,6 +23,7 @@ const columnStatesHandlers = require('./src/ipc-handlers/column-states');
 const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
 const filterStateHandlers = require('./src/ipc-handlers/filter-state');
 const credentialsStore = require('./src/database/credentials-store');
+const { getPreferences } = require('./src/database/preferences-store');
 
 // Initialize electron-store for secure settings storage
 const store = new Store();
@@ -73,6 +75,17 @@ function createMainWindow() {
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
   });
+
+  // Check if application should open in expanded/maximized mode
+  try {
+    const preferences = getPreferences();
+    if (preferences?.openExpanded) {
+      mainWindow.maximize();
+      console.log('✓ Window maximized (openExpanded preference)');
+    }
+  } catch (err) {
+    console.error('Error loading openExpanded preference:', err);
+  }
 
   // Create application menu
   const menuTemplate = [
@@ -473,8 +486,12 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
       if (!mainWindow.getBrowserViews().includes(webView)) {
         mainWindow.addBrowserView(webView);
       }
+      // Set bounds to make it visible
       webView.setBounds(bounds);
       webView.setAutoResize({ width: true, height: true });
+      // Bring to top to ensure it's visible
+      webView.webContents.focus();
+      console.log('BrowserView restored with bounds:', bounds);
       return { success: true, url: webView.webContents.getURL(), restored: true };
     }
 
@@ -680,6 +697,14 @@ ipcMain.handle('webview:execute-javascript', async (event, code) => {
 app.whenReady().then(async () => {
   console.log('🚀 App ready, starting initialization...');
 
+  // Initialize local SQLite database for templates and preferences
+  try {
+    localDb.initDatabase();
+    console.log('✓ Local SQLite database initialized');
+  } catch (err) {
+    console.error('✗ Failed to initialize local database:', err);
+  }
+
   const savedConfig = store.get('dbConfig');
   console.log('Saved config:', savedConfig ? 'Found' : 'Not found');
 
@@ -729,4 +754,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   console.log('Shutting down gracefully...');
   await db.close();
+  localDb.closeDatabase();
 });

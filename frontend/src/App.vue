@@ -314,6 +314,15 @@ onMounted(async () => {
       if (response?.success && response.data?.theme) {
         theme.value = response.data.theme;
       }
+
+      // Navigate to default tab from preferences
+      if (response?.success && response.data?.defaultTab) {
+        const defaultTab = response.data.defaultTab;
+        if (defaultTab !== router.currentRoute.value.path) {
+          await router.push(defaultTab);
+          console.log('✓ Navigated to default tab:', defaultTab);
+        }
+      }
     }
   } catch (error) {
     console.error('Error loading theme:', error);
@@ -341,6 +350,15 @@ onMounted(async () => {
       router.push(path);
     });
   }
+
+  // Listen for preferences updated event
+  window.addEventListener('preferencesUpdated', (event) => {
+    const updatedPreferences = event.detail;
+    if (updatedPreferences?.theme) {
+      theme.value = updatedPreferences.theme;
+      console.log('✓ Theme updated from preferences:', updatedPreferences.theme);
+    }
+  });
 });
 
 // Show help modal

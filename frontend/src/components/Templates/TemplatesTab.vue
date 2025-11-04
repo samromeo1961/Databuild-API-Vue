@@ -73,6 +73,22 @@
             <i class="bi bi-plus-square"></i>
           </button>
           <button
+            class="btn btn-outline-info"
+            @click="handleImportCSV"
+            :disabled="!selectedTemplate"
+            title="Import from CSV"
+          >
+            <i class="bi bi-filetype-csv"></i>
+          </button>
+          <button
+            class="btn btn-outline-info"
+            @click="handlePasteFromClipboard"
+            :disabled="!selectedTemplate"
+            title="Paste from Clipboard (Excel)"
+          >
+            <i class="bi bi-clipboard"></i>
+          </button>
+          <button
             class="btn btn-outline-secondary"
             @click="openColumnPanel"
             :disabled="!selectedTemplate"
@@ -833,8 +849,14 @@ const columnDefs = ref([
     minWidth: 300,
     filter: 'agTextColumnFilter',
     sortable: true,
+    editable: true,
+    singleClickEdit: true,
     valueGetter: (params) => {
       return params.data.description || params.data.Description || '';
+    },
+    valueSetter: (params) => {
+      params.data.description = params.newValue;
+      return true;
     }
   },
   {
@@ -842,7 +864,9 @@ const columnDefs = ref([
     headerName: 'Unit',
     width: 80,
     filter: 'agTextColumnFilter',
-    sortable: true
+    sortable: true,
+    editable: true,
+    singleClickEdit: true
   },
   {
     field: 'quantity',
@@ -850,9 +874,14 @@ const columnDefs = ref([
     width: 100,
     filter: 'agNumberColumnFilter',
     sortable: true,
+    editable: true,
+    singleClickEdit: true,
     valueFormatter: (params) => {
       if (params.value == null) return '-';
       return params.value.toString();
+    },
+    valueParser: (params) => {
+      return parseFloat(params.newValue) || 1;
     },
     cellStyle: { textAlign: 'right' }
   },
@@ -862,9 +891,15 @@ const columnDefs = ref([
     width: 120,
     filter: 'agNumberColumnFilter',
     sortable: true,
+    editable: true,
+    singleClickEdit: true,
     valueFormatter: (params) => {
       if (params.value == null) return '-';
       return `$${params.value.toFixed(2)}`;
+    },
+    valueParser: (params) => {
+      const cleaned = String(params.newValue).replace(/[$,]/g, '');
+      return parseFloat(cleaned) || 0;
     },
     cellStyle: { textAlign: 'right' }
   },
@@ -873,7 +908,9 @@ const columnDefs = ref([
     headerName: 'Cost Centre',
     width: 130,
     filter: 'agTextColumnFilter',
-    sortable: true
+    sortable: true,
+    editable: true,
+    singleClickEdit: true
   },
   {
     field: 'zzType',
@@ -886,6 +923,7 @@ const columnDefs = ref([
       values: ['area', 'linear', 'segment', 'count']
     },
     editable: true,
+    singleClickEdit: true,
     tooltipValueGetter: (params) => params.value
   },
   {
@@ -1136,27 +1174,58 @@ const onCellValueChanged = async (event) => {
   const newValue = event.newValue;
   const oldValue = event.oldValue;
 
-  // Only handle zzType changes
-  if (field === 'zzType') {
-    try {
-      // Save zzType override to electron-store
-      const result = await api.zzTypeStore.set(data.PriceCode, newValue.toLowerCase());
-      console.log('[zzType] Saved override:', data.PriceCode, '→', newValue.toLowerCase());
+  if (!selectedTemplate.value) return;
 
-      if (result && result.success) {
-        success.value = 'zzType updated successfully';
-        setTimeout(() => success.value = null, 3000);
-      } else {
-        error.value = 'Failed to update zzType';
-        // Revert the change in the grid
-        event.node.setDataValue(field, oldValue);
-      }
-    } catch (err) {
-      console.error('Error updating zzType:', err);
-      error.value = 'Failed to update zzType';
-      // Revert the change in the grid
-      event.node.setDataValue(field, oldValue);
+  try {
+    // For zzType, also save override to zzType store
+    if (field === 'zzType') {
+      await api.zzTypeStore.set(data.PriceCode, newValue.toLowerCase());
+      console.log('[zzType] Saved override:', data.PriceCode, '→', newValue.toLowerCase());
     }
+
+    // Update the item in the template data
+    const updatedItems = (selectedTemplate.value.items || []).map(item => {
+      if (item.PriceCode === data.PriceCode) {
+        return {
+          ...item,
+          [field]: newValue
+        };
+      }
+      return item;
+    });
+
+    // Normalize all items to ensure they're serializable
+    const normalizedItems = updatedItems.map(item => ({
+      PriceCode: String(item.PriceCode),
+      description: String(item.description || ''),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      zzType: String(item.zzType || 'count'),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // Save the updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: normalizedItems,
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    // Reload templates to refresh
+    await loadTemplates();
+
+    console.log(`[Template] Updated ${field} for ${data.PriceCode}: ${oldValue} → ${newValue}`);
+  } catch (err) {
+    console.error('Error updating template item:', err);
+    error.value = `Failed to update ${field}`;
+    // Revert the change in the grid
+    event.node.setDataValue(field, oldValue);
   }
 };
 
@@ -1479,10 +1548,23 @@ const handleUpdatePrices = async () => {
     });
 
     if (response?.success) {
-      // Update the template with new prices
+      // Update the template with new prices - normalize items to ensure they're serializable
+      const normalizedItems = (response.updatedItems || []).map(item => ({
+        PriceCode: String(item.PriceCode),
+        description: String(item.description),
+        Unit: String(item.Unit || ''),
+        Price: Number(item.Price || 0),
+        CostCentre: String(item.CostCentre || ''),
+        zzType: String(item.zzType || 'count'),
+        quantity: Number(item.quantity || 1)
+      }));
+
       const updatedTemplate = {
-        ...selectedTemplate.value,
-        items: response.updatedItems,
+        id: String(selectedTemplate.value.id),
+        templateName: String(selectedTemplate.value.templateName),
+        description: String(selectedTemplate.value.description || ''),
+        items: normalizedItems,
+        dateCreated: String(selectedTemplate.value.dateCreated),
         dateModified: new Date().toISOString()
       };
       await api.templatesStore.save(updatedTemplate);
@@ -1623,6 +1705,250 @@ const handleAddFromCatalogue = async () => {
   // Load cost centres and initial catalogue items
   await loadCatalogueCostCentres();
   await loadCatalogueItems();
+};
+
+// Handle Import from CSV
+const handleImportCSV = () => {
+  if (!selectedTemplate.value) return;
+
+  // Create file input element
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const items = parseCSV(text);
+
+      if (items.length === 0) {
+        error.value = 'No valid items found in CSV file';
+        return;
+      }
+
+      await bulkImportItems(items);
+      success.value = `Successfully imported ${items.length} items from CSV`;
+      setTimeout(() => success.value = null, 3000);
+    } catch (err) {
+      console.error('Error importing CSV:', err);
+      error.value = `Failed to import CSV: ${err.message}`;
+    }
+  };
+  input.click();
+};
+
+// Handle Paste from Clipboard
+const handlePasteFromClipboard = async () => {
+  if (!selectedTemplate.value) return;
+
+  try {
+    const text = await navigator.clipboard.readText();
+
+    if (!text || text.trim() === '') {
+      error.value = 'Clipboard is empty';
+      return;
+    }
+
+    // Try to parse as tab-separated (Excel) or CSV
+    const items = parseClipboardData(text);
+
+    if (items.length === 0) {
+      error.value = 'No valid items found in clipboard data';
+      return;
+    }
+
+    await bulkImportItems(items);
+    success.value = `Successfully imported ${items.length} items from clipboard`;
+    setTimeout(() => success.value = null, 3000);
+  } catch (err) {
+    console.error('Error pasting from clipboard:', err);
+    error.value = `Failed to paste: ${err.message}`;
+  }
+};
+
+// Parse CSV text
+const parseCSV = (text) => {
+  const lines = text.split('\n').filter(line => line.trim());
+  if (lines.length < 2) return []; // Need at least header and one row
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const items = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const item = {};
+
+    headers.forEach((header, index) => {
+      item[header.toLowerCase()] = values[index] || '';
+    });
+
+    // Map to template item structure
+    if (item.pricecode || item.code || item.sku) {
+      items.push({
+        PriceCode: item.pricecode || item.code || item.sku || '',
+        description: item.description || item.name || '',
+        Unit: item.unit || '',
+        Price: parseFloat(item.price || item['cost each'] || 0),
+        CostCentre: item.costcentre || item['cost centre'] || '',
+        zzType: item.zztype || item.type || 'count'
+      });
+    }
+  }
+
+  return items;
+};
+
+// Parse clipboard data (tab or comma separated)
+// Parse a single line respecting quoted fields and escaped characters
+const parseLine = (line, delimiter) => {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        // Escaped quote within quoted field
+        current += '"';
+        i += 2;
+        continue;
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes;
+        i++;
+        continue;
+      }
+    }
+
+    if (!inQuotes && char === delimiter) {
+      // End of field
+      values.push(current.trim());
+      current = '';
+      i++;
+      continue;
+    }
+
+    // Regular character
+    current += char;
+    i++;
+  }
+
+  // Add last field
+  values.push(current.trim());
+  return values;
+};
+
+const parseClipboardData = (text) => {
+  const lines = text.split('\n').filter(line => line.trim());
+  if (lines.length < 1) return [];
+
+  // Detect delimiter (tab for Excel, comma for CSV)
+  const delimiter = lines[0].includes('\t') ? '\t' : ',';
+  const items = [];
+
+  // Check if first line looks like headers
+  const firstLine = parseLine(lines[0], delimiter);
+  const hasHeaders = firstLine.some(v =>
+    v.toLowerCase().includes('code') ||
+    v.toLowerCase().includes('description') ||
+    v.toLowerCase().includes('price')
+  );
+
+  const startIndex = hasHeaders ? 1 : 0;
+  const headers = hasHeaders ? firstLine.map(h => h.toLowerCase()) :
+    ['pricecode', 'description', 'unit', 'price', 'costcentre', 'zztype'];
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const values = parseLine(lines[i], delimiter);
+    const item = {};
+
+    headers.forEach((header, index) => {
+      item[header] = values[index] || '';
+    });
+
+    // Map to template item structure
+    if (item.pricecode || item.code || item.sku || values[0]) {
+      items.push({
+        PriceCode: item.pricecode || item.code || item.sku || values[0] || '',
+        description: item.description || item.name || values[1] || '',
+        Unit: item.unit || values[2] || '',
+        Price: parseFloat(item.price || item['cost each'] || values[3] || 0),
+        CostCentre: item.costcentre || item['cost centre'] || values[4] || '',
+        zzType: item.zztype || item.type || values[5] || 'count'
+      });
+    }
+  }
+
+  return items;
+};
+
+// Bulk import items into current template
+const bulkImportItems = async (items) => {
+  if (!selectedTemplate.value || items.length === 0) return;
+
+  try {
+    // Get existing items
+    const existingItems = selectedTemplate.value.items || [];
+    const existingCodes = new Set(existingItems.map(item => item.PriceCode));
+
+    // Filter out duplicates
+    const newItems = items.filter(item => !existingCodes.has(item.PriceCode));
+
+    if (newItems.length === 0) {
+      error.value = 'All items already exist in this template';
+      return;
+    }
+
+    // Normalize new items to match expected format
+    const itemsToAdd = newItems.map(item => ({
+      PriceCode: String(item.PriceCode),
+      description: String(item.description),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      zzType: String(item.zzType || 'count'),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // Normalize existing items to ensure they're serializable
+    const normalizedExistingItems = existingItems.map(item => ({
+      PriceCode: String(item.PriceCode),
+      description: String(item.description),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      zzType: String(item.zzType || 'count'),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // Create updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: [...normalizedExistingItems, ...itemsToAdd],
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    // Reload templates to refresh the current template
+    await loadTemplates();
+
+    const skipped = items.length - newItems.length;
+    if (skipped > 0) {
+      success.value += ` (${skipped} duplicate items skipped)`;
+    }
+  } catch (err) {
+    throw err;
+  }
 };
 
 // Load catalogue cost centres
