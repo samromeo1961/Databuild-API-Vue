@@ -558,6 +558,33 @@ const columnDefs = ref([
     }
   },
   {
+    field: 'LatestPriceDate',
+    headerName: 'Price Date',
+    width: 120,
+    hide: true, // Hidden by default, user can show via column panel
+    valueFormatter: (params) => {
+      if (!params.value) return '-';
+      const date = new Date(params.value);
+      return date.toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    },
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    tooltipValueGetter: (params) => {
+      if (!params.value) return 'No price date';
+      const date = new Date(params.value);
+      return date.toLocaleDateString('en-AU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+  },
+  {
     field: 'CostCentre',
     headerName: 'Cost Centre',
     width: 130,
@@ -938,11 +965,9 @@ const onGridReady = (params) => {
   params.api.addEventListener('columnVisible', saveColumnState);
   params.api.addEventListener('columnPinned', saveColumnState);
 
-  // Only load data if filter state has already been loaded
-  // Otherwise, loadFilterState() will call loadData() when it completes
-  if (isFilterStateLoaded.value) {
-    loadData();
-  }
+  // Always load data when grid is ready
+  // Filter state will be applied if already loaded, or will load first
+  loadData();
 };
 
 // Selection changed handler
@@ -1864,14 +1889,12 @@ const loadFilterState = async () => {
       // Mark as loaded
       isFilterStateLoaded.value = true;
 
-      // Reload data with restored filters if grid is ready
-      if (gridApi.value) {
-        console.log('✓ Reloading data with restored filters');
-        await loadData(true);
-      }
+      // Note: Data will be loaded by onGridReady() which is called after this
+      console.log('✓ Catalogue filter state loaded and ready');
     } else {
       // No saved filter state, mark as loaded anyway
       isFilterStateLoaded.value = true;
+      console.log('✓ No saved filter state, using defaults');
     }
   } catch (err) {
     console.error('Error loading catalogue filter state:', err);
