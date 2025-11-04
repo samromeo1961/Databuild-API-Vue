@@ -1346,20 +1346,22 @@ const loadColumnState = async () => {
       if (savedData.headerNames) {
         console.log('[DEBUG] loadColumnState: Applying header names:', savedData.headerNames);
 
-        // Update the columnDefs ref directly
-        columnDefs.value.forEach(colDef => {
-          if (savedData.headerNames[colDef.field]) {
-            console.log(`[DEBUG] loadColumnState: Updating columnDefs ${colDef.field} to: ${savedData.headerNames[colDef.field]}`);
-            colDef.headerName = savedData.headerNames[colDef.field];
-          }
-        });
-
-        // Also update via grid API
+        // Update column headers via grid API (using colId as key, matching how we saved)
         Object.keys(savedData.headerNames).forEach(colId => {
           const colDef = gridApi.value.getColumnDef(colId);
           if (colDef) {
-            console.log(`[DEBUG] loadColumnState: Setting grid API ${colId} headerName to: ${savedData.headerNames[colId]}`);
+            console.log(`[DEBUG] loadColumnState: Setting ${colId} headerName to: ${savedData.headerNames[colId]}`);
             colDef.headerName = savedData.headerNames[colId];
+          } else {
+            console.warn(`[DEBUG] loadColumnState: Column ${colId} not found in grid`);
+          }
+        });
+
+        // Also update the columnDefs ref to keep it in sync
+        columnDefs.value.forEach(colDef => {
+          // Match by field name (most common case where colId === field)
+          if (colDef.field && savedData.headerNames[colDef.field]) {
+            colDef.headerName = savedData.headerNames[colDef.field];
           }
         });
 
