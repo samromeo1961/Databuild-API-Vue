@@ -586,11 +586,16 @@ watch(() => router.currentRoute.value.path, async (newPath, oldPath) => {
 // Setup and cleanup
 onMounted(async () => {
   // Load last active tab from preferences
+  let shouldAutoMaximize = false;
   try {
     if (api.preferencesStore) {
       const response = await api.preferencesStore.get();
       if (response?.success && response.data?.lastActiveTab) {
         lastTabPath.value = response.data.lastActiveTab;
+      }
+      // Check if webview should auto-maximize
+      if (response?.success && response.data?.openExpanded) {
+        shouldAutoMaximize = true;
       }
     }
   } catch (error) {
@@ -607,6 +612,12 @@ onMounted(async () => {
 
   // Create BrowserView
   await createWebView();
+
+  // Auto-maximize webview if preference is enabled
+  if (shouldAutoMaximize) {
+    console.log('Auto-maximizing webview based on openExpanded preference');
+    toggleMaximize();
+  }
 
   // Listen for window resize
   window.addEventListener('resize', handleResize);

@@ -65,45 +65,15 @@ function createSettingsWindow() {
 function createMainWindow() {
   console.log('🚀 createMainWindow() function called');
 
-  // Check if application should open in expanded/maximized mode
-  let shouldMaximize = false;
-  try {
-    const preferences = getPreferences();
-    shouldMaximize = preferences?.openExpanded || false;
-  } catch (err) {
-    console.error('Error loading openExpanded preference:', err);
-  }
-
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    show: shouldMaximize ? false : true, // Only delay showing if we need to maximize
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
-  });
-
-  // Maximize window immediately if preference is set
-  if (shouldMaximize) {
-    mainWindow.maximize();
-    console.log('✓ Window maximized (openExpanded preference)');
-    console.log('Window isMaximized:', mainWindow.isMaximized());
-    console.log('Window bounds:', mainWindow.getBounds());
-  }
-
-  // Show window after DOM is ready (either maximized or normal)
-  mainWindow.once('ready-to-show', () => {
-    if (shouldMaximize && !mainWindow.isVisible()) {
-      // Re-maximize just before showing to ensure it's applied
-      mainWindow.maximize();
-    }
-    mainWindow.show();
-    console.log('Window shown. isMaximized:', mainWindow.isMaximized());
-    console.log('Window isVisible:', mainWindow.isVisible());
-    console.log('Window bounds after show:', mainWindow.getBounds());
   });
 
   // Create application menu
@@ -542,6 +512,9 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
 
     // Create new BrowserView with persistent session (first time only)
     console.log('Creating new BrowserView with persistent session...');
+    console.log('Received bounds from frontend:', bounds);
+    console.log('MainWindow content bounds:', mainWindow.getContentBounds());
+
     webView = new BrowserView({
       webPreferences: {
         nodeIntegration: false,
@@ -557,8 +530,25 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     webView.setBounds(bounds);
     webView.setAutoResize({ width: true, height: true });
 
+    console.log('BrowserView added to window');
+    console.log('BrowserView bounds set to:', webView.getBounds());
+    console.log('BrowserView webContents ID:', webView.webContents.id);
+    console.log('BrowserViews in window:', mainWindow.getBrowserViews().length);
+
     // Load URL (only for first-time creation)
+    console.log('Loading URL in BrowserView:', url);
     await webView.webContents.loadURL(url);
+    console.log('URL loaded in BrowserView');
+
+    // Force webContents to be visible and bring to front
+    webView.webContents.focus();
+
+    // Remove and re-add BrowserView to ensure it's on top
+    mainWindow.removeBrowserView(webView);
+    mainWindow.addBrowserView(webView);
+    webView.setBounds(bounds);
+
+    console.log('BrowserView re-added to ensure visibility');
 
     // Send navigation events back to renderer
     webView.webContents.on('did-start-loading', () => {
