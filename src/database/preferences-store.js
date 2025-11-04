@@ -17,7 +17,7 @@ console.log('✓ Preferences storage initialized at:', preferencesStore.path);
  */
 function getDefaultPreferences() {
   return {
-    priceLevel: 1,
+    priceLevel: 0,
     defaultSystemDatabase: 'CROWNESYS',
     costCentreBank: '',
     supplierSubGroups: [2],
@@ -27,14 +27,26 @@ function getDefaultPreferences() {
       customFolders: []
     },
     defaultTakeoffTypes: {
-      area: 'DBxArea',
-      linear: 'DBxLinear',
-      count: 'DBxCount',
-      segment: 'DBxSegment',
-      part: 'DBxPart',
-      dragDrop: 'DBxD&D'
+      area: 'Area',
+      linear: 'Linear',
+      count: 'Count',
+      segment: 'Segment',
+      part: 'Item',
+      dragDrop: 'Item'
     },
-    unitTakeoffMappings: {},
+    unitTakeoffMappings: {
+      // Default unit to zzType mappings
+      // Format: 'unit': 'zzType' where zzType is 'area', 'linear', 'segment', or 'count'
+      'm²': 'area',
+      'm2': 'area',
+      'sqm': 'area',
+      'm': 'linear',
+      'lm': 'linear',
+      'metre': 'linear',
+      'no': 'count',
+      'each': 'count',
+      'nr': 'count'
+    },
     zzTakeoff: {
       enabled: false,
       apiUrl: 'https://api.zztakeoff.com',
@@ -69,6 +81,10 @@ function getPreferences() {
       defaultTakeoffTypes: {
         ...defaults.defaultTakeoffTypes,
         ...(settings?.defaultTakeoffTypes || {})
+      },
+      unitTakeoffMappings: {
+        ...defaults.unitTakeoffMappings,
+        ...(settings?.unitTakeoffMappings || {})
       },
       zzTakeoff: {
         ...defaults.zzTakeoff,

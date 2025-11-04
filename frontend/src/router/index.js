@@ -8,8 +8,8 @@ import ContactsTab from '../components/Contacts/ContactsTab.vue';
 import TemplatesTab from '../components/Templates/TemplatesTab.vue';
 import FavouritesTab from '../components/Favourites/FavouritesTab.vue';
 import RecentsTab from '../components/Recents/RecentsTab.vue';
-import PreferencesTab from '../components/Preferences/PreferencesTab.vue';
 import ZzTakeoffTab from '../components/ZzTakeoff/ZzTakeoffTab.vue';
+import ZzTakeoffWebTab from '../components/ZzTakeoff/ZzTakeoffWebTab.vue';
 
 const routes = [
   {
@@ -52,14 +52,14 @@ const routes = [
     component: RecentsTab
   },
   {
-    path: '/preferences',
-    name: 'Preferences',
-    component: PreferencesTab
-  },
-  {
     path: '/zztakeoff',
     name: 'zzTakeoff',
     component: ZzTakeoffTab
+  },
+  {
+    path: '/zztakeoff-web',
+    name: 'zzTakeoff Web',
+    component: ZzTakeoffWebTab
   }
 ];
 

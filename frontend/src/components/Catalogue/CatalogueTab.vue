@@ -401,6 +401,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, inject, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
@@ -408,6 +409,7 @@ import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
 import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
+const router = useRouter();
 const theme = inject('theme');
 
 // State
@@ -506,6 +508,28 @@ const columnDefs = ref([
     sortable: true,
     editable: (params) => params.data.Unit !== 'HEADING',
     tooltipValueGetter: (params) => params.value
+  },
+  {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 100,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: (params) => params.data.Unit !== 'HEADING',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['area', 'linear', 'segment', 'count']
+    },
+    valueFormatter: (params) => {
+      // Don't show for heading rows
+      if (params.data && params.data.Unit === 'HEADING') return '';
+      // Capitalize first letter for display
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : '';
+    },
+    tooltipValueGetter: (params) => {
+      if (params.data && params.data.Unit === 'HEADING') return null;
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : null;
+    }
   },
   {
     field: 'LatestPrice',
@@ -685,7 +709,35 @@ const loadData = async (resetPage = false) => {
     const response = await api.catalogue.getItems(params);
 
     if (response?.success) {
-      rowData.value = response.data || [];
+      const items = response.data || [];
+
+      // Load preferences for unit mappings and zzType overrides
+      const [prefsResult, zzTypesResult] = await Promise.all([
+        api.preferencesStore.get(),
+        api.zzTypeStore.getAll()
+      ]);
+
+      const unitMappings = prefsResult?.success ? prefsResult.data.unitTakeoffMappings : {};
+      const zzTypeOverrides = zzTypesResult?.success ? zzTypesResult.types : {};
+
+      console.log('[zzType] Unit mappings:', unitMappings);
+      console.log('[zzType] Overrides:', zzTypeOverrides);
+
+      // Resolve zzType for each item
+      items.forEach(item => {
+        // Resolution priority: 1. Override, 2. Unit mapping, 3. Default to 'count'
+        if (zzTypeOverrides[item.ItemCode]) {
+          item.zzType = zzTypeOverrides[item.ItemCode];
+          console.log(`[zzType] ${item.ItemCode}: Using override → ${item.zzType}`);
+        } else if (item.Unit && unitMappings[item.Unit]) {
+          item.zzType = unitMappings[item.Unit];
+          console.log(`[zzType] ${item.ItemCode}: Using unit mapping ${item.Unit} → ${item.zzType}`);
+        } else {
+          item.zzType = 'count'; // Default
+        }
+      });
+
+      rowData.value = items;
       totalSize.value = response.total || response.data?.length || 0;
       filteredCount.value = totalSize.value; // Initialize to total
 
@@ -818,6 +870,10 @@ const onCellValueChanged = async (event) => {
         priceCode: data.ItemCode,
         price: newValue
       });
+    } else if (field === 'zzType') {
+      // Save zzType override to electron-store
+      result = await api.zzTypeStore.set(data.ItemCode, newValue.toLowerCase());
+      console.log('[zzType] Saved override:', data.ItemCode, '→', newValue.toLowerCase());
     }
 
     if (result && result.success) {
@@ -1460,45 +1516,83 @@ const confirmAddToTemplate = async () => {
   }
 };
 
-// Send to zzTakeoff (simulated)
+// Send to zzTakeoff (real integration)
 const handleSendToZzTakeoff = async () => {
   if (selectedRows.value.length === 0) return;
 
   try {
-    // Simulate sending to zzTakeoff API
-    const payload = {
-      items: selectedRows.value.map(row => ({
+    console.log('[zzTakeoff] Preparing to send items:', selectedRows.value);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Send the first item (single item mode as requested)
+    const row = selectedRows.value[0];
+
+    // Build the JavaScript code to execute in zzTakeoff.com
+    const jsCode = `
+      startTakeoffWithProperties({
+        type: ${JSON.stringify(row.zzType || 'count')},
+        properties: {
+          name: {
+            value: ${JSON.stringify(row.Description || '')}
+          },
+          color: {
+            value: '#FF6B35'
+          },
+          'product id': {
+            value: ${JSON.stringify(row.ItemCode || '')}
+          },
+          unit: {
+            value: ${JSON.stringify(row.Unit || '')}
+          },
+          price: {
+            value: ${JSON.stringify(row.LatestPrice ? row.LatestPrice.toString() : '0')}
+          },
+          'cost centre': {
+            value: ${JSON.stringify(row.CostCentre || '')}
+          },
+          'cost centre name': {
+            value: ${JSON.stringify(row.CostCentreName || '')}
+          }
+        }
+      });
+    `;
+
+    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+
+    // Execute the JavaScript in the BrowserView
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    console.log('[zzTakeoff] JavaScript execution result:', result);
+
+    // Add to send history
+    await api.sendHistory.add({
+      items: [{
         code: row.ItemCode,
         description: row.Description,
         unit: row.Unit,
         price: row.LatestPrice,
         quantity: 1
-      })),
-      project: 'Demo Project',
-      timestamp: new Date().toISOString()
-    };
-
-    // Add to send history
-    await api.sendHistory.add({
-      items: payload.items,
-      project: payload.project,
-      status: 'Success (Simulated)',
-      sentAt: payload.timestamp,
-      itemCount: payload.items.length
+      }],
+      project: 'zzTakeoff Integration',
+      status: result.success ? 'Success' : 'Failed',
+      sentAt: new Date().toISOString(),
+      itemCount: 1
     });
 
-    // Add all items to recents
-    for (const row of selectedRows.value) {
-      await addToRecents(row);
-    }
+    // Add to recents
+    await addToRecents(row);
 
-    success.value = `Simulated sending ${selectedRows.value.length} item(s) to zzTakeoff`;
+    success.value = `Sent "${row.Description}" to zzTakeoff`;
     setTimeout(() => success.value = null, 3000);
 
-    console.log('Simulated zzTakeoff payload:', payload);
   } catch (err) {
     console.error('Error sending to zzTakeoff:', err);
-    error.value = 'Failed to send items to zzTakeoff';
+    error.value = `Failed to send items to zzTakeoff: ${err.message}`;
   }
 };
 
@@ -1730,7 +1824,7 @@ onMounted(() => {
     if (event.detail?.itemsPerPage) {
       pageSize.value = event.detail.itemsPerPage;
       if (gridApi.value) {
-        gridApi.value.paginationSetPageSize(pageSize.value);
+        gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
     }
@@ -1740,7 +1834,7 @@ onMounted(() => {
 // Watch page size changes
 watch(pageSize, () => {
   if (gridApi.value) {
-    gridApi.value.paginationSetPageSize(pageSize.value);
+    gridApi.value.setGridOption('paginationPageSize', pageSize.value);
     // No need to reload data - AG Grid handles pagination client-side
   }
 });

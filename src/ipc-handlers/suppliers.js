@@ -6,6 +6,7 @@ const { getPool } = require('../database/connection');
  */
 async function getSupplierGroups(event, params) {
   try {
+    console.log('[BACKEND] getSupplierGroups called');
     const pool = getPool();
     if (!pool) {
       throw new Error('Database connection not available');
@@ -14,12 +15,16 @@ async function getSupplierGroups(event, params) {
     const query = `
       SELECT
         GroupNumber,
-        GroupName
-      FROM [T_Esys].[dbo].[SupplierGroup]
+        GroupName,
+        Lcolor
+      FROM SupplierGroup
       ORDER BY GroupNumber
     `;
 
+    console.log('[BACKEND] Executing query:', query);
     const result = await pool.request().query(query);
+    console.log('[BACKEND] Query result count:', result.recordset.length);
+    console.log('[BACKEND] Groups found:', result.recordset);
 
     return {
       success: true,
@@ -28,7 +33,7 @@ async function getSupplierGroups(event, params) {
     };
 
   } catch (err) {
-    console.error('Error fetching supplier groups:', err);
+    console.error('[BACKEND] Error fetching supplier groups:', err);
     return {
       success: false,
       error: 'Failed to fetch supplier groups',
@@ -54,7 +59,6 @@ async function getSuppliersList(event, params) {
 
     // Build WHERE clause
     let whereConditions = [
-      'S.SuppGroup < 3',
       '(S.SupplierName IS NOT NULL AND S.SupplierName != \'\')'
     ];
 

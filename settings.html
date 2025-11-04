@@ -54,7 +54,7 @@
             font-size: 14px;
         }
 
-        input {
+        input, select {
             width: 100%;
             padding: 12px;
             border: 1px solid #ddd;
@@ -63,9 +63,19 @@
             transition: border-color 0.3s;
         }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        select {
+            background: white;
+            cursor: pointer;
+        }
+
+        select:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
         }
 
         .button-group {
@@ -134,6 +144,75 @@
             color: #888;
             margin-top: 5px;
         }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+        }
+
+        .input-group button {
+            flex: 0 0 120px;
+        }
+
+        .validation-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .validation-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .validation-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .validation-status.validating {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .validation-details {
+            font-size: 11px;
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-left-color: #0c5460;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #databaseSelectGroup {
+            display: none;
+        }
+
+        .show {
+            display: block !important;
+        }
     </style>
 </head>
 <body>
@@ -144,14 +223,28 @@
         <form id="settingsForm">
             <div class="form-group">
                 <label for="server">SQL Server</label>
-                <input type="text" id="server" required placeholder="localhost\SQLEXPRESS">
+                <div class="input-group">
+                    <input type="text" id="server" required placeholder="localhost\SQLEXPRESS">
+                    <button type="button" class="btn-secondary" id="loadDbBtn">Load DBs</button>
+                </div>
                 <div class="hint">Server name or instance (e.g., localhost\SQLEXPRESS)</div>
             </div>
 
-            <div class="form-group">
-                <label for="database">Database</label>
+            <div class="form-group" id="databaseManualGroup">
+                <label for="database">Database (Manual Entry)</label>
                 <input type="text" id="database" required placeholder="CROWNESYS">
-                <div class="hint">Database name (e.g., CROWNESYS)</div>
+                <div class="hint">Type database name or load from server using "Load DBs" button</div>
+            </div>
+
+            <div class="form-group" id="databaseSelectGroup">
+                <label for="databaseSelect">Select Database</label>
+                <select id="databaseSelect">
+                    <option value="">-- Select a database --</option>
+                </select>
+                <div class="hint">Select a Databuild system database from the list</div>
+
+                <!-- Validation Status -->
+                <div id="validationStatus" class="validation-status"></div>
             </div>
 
             <div class="form-group">
@@ -179,7 +272,15 @@
         const form = document.getElementById('settingsForm');
         const testBtn = document.getElementById('testBtn');
         const saveBtn = document.getElementById('saveBtn');
+        const loadDbBtn = document.getElementById('loadDbBtn');
         const statusMessage = document.getElementById('statusMessage');
+        const databaseSelect = document.getElementById('databaseSelect');
+        const databaseInput = document.getElementById('database');
+        const databaseSelectGroup = document.getElementById('databaseSelectGroup');
+        const databaseManualGroup = document.getElementById('databaseManualGroup');
+        const validationStatus = document.getElementById('validationStatus');
+
+        let loadedDatabases = [];
 
         // Load saved settings if available
         ipcRenderer.invoke('db:get-saved-connection').then(config => {
@@ -197,14 +298,139 @@
             statusMessage.style.display = 'block';
         }
 
+        function showValidation(message, type, details = null) {
+            validationStatus.innerHTML = message;
+            if (details) {
+                validationStatus.innerHTML += `<div class="validation-details">${details}</div>`;
+            }
+            validationStatus.className = `validation-status ${type} show`;
+        }
+
+        function hideValidation() {
+            validationStatus.style.display = 'none';
+            validationStatus.className = 'validation-status';
+        }
+
         function getFormData() {
+            // Use dropdown value if it's selected, otherwise use manual input
+            const database = databaseSelect.value || databaseInput.value;
             return {
                 server: document.getElementById('server').value,
-                database: document.getElementById('database').value,
+                database: database,
                 user: document.getElementById('user').value,
                 password: document.getElementById('password').value
             };
         }
+
+        // Load databases from server
+        loadDbBtn.addEventListener('click', async () => {
+            const server = document.getElementById('server').value;
+            const user = document.getElementById('user').value;
+            const password = document.getElementById('password').value;
+
+            if (!server || !user || !password) {
+                showStatus('Please enter server, username, and password first', 'error');
+                return;
+            }
+
+            loadDbBtn.disabled = true;
+            loadDbBtn.textContent = 'Loading...';
+
+            try {
+                // Connect to server to get database list
+                const testConfig = { server, user, password, database: 'master' };
+                const testResult = await ipcRenderer.invoke('db:test-connection', testConfig);
+
+                if (!testResult.success) {
+                    showStatus('✗ Cannot connect to server: ' + testResult.message, 'error');
+                    loadDbBtn.disabled = false;
+                    loadDbBtn.textContent = 'Load DBs';
+                    return;
+                }
+
+                // Now get the database list (this needs to be implemented as a separate IPC handler)
+                // For now, we'll use a workaround by getting databases through preferences handler
+                const config = { server, user, password, database: 'master' };
+
+                // We need to temporarily connect to get the database list
+                // This is a bit of a hack - we'll connect and then call the getDatabases handler
+                await ipcRenderer.invoke('db:save-connection', config);
+                const dbResult = await ipcRenderer.invoke('preferences:get-databases');
+
+                if (dbResult.success && dbResult.data) {
+                    loadedDatabases = dbResult.data;
+
+                    // Populate dropdown
+                    databaseSelect.innerHTML = '<option value="">-- Select a database --</option>';
+                    loadedDatabases.forEach(db => {
+                        const option = document.createElement('option');
+                        option.value = db;
+                        option.textContent = db;
+                        databaseSelect.appendChild(option);
+                    });
+
+                    // Show dropdown, hide manual input
+                    databaseSelectGroup.classList.add('show');
+                    databaseManualGroup.style.display = 'none';
+                    databaseInput.required = false;
+
+                    showStatus(`✓ Loaded ${loadedDatabases.length} databases from server`, 'success');
+                } else {
+                    showStatus('✗ Failed to load databases', 'error');
+                }
+            } catch (error) {
+                showStatus('✗ Error: ' + error.message, 'error');
+            }
+
+            loadDbBtn.disabled = false;
+            loadDbBtn.textContent = 'Load DBs';
+        });
+
+        // Database selection change - validate schema
+        databaseSelect.addEventListener('change', async () => {
+            const selectedDb = databaseSelect.value;
+            if (!selectedDb) {
+                hideValidation();
+                return;
+            }
+
+            // Update hidden input
+            databaseInput.value = selectedDb;
+
+            // Validate database schema
+            showValidation('<span class="spinner"></span> Validating database schema...', 'validating');
+
+            try {
+                const config = getFormData();
+                const result = await ipcRenderer.invoke('db:test-connection', config);
+
+                if (result.success && result.tables && result.tables.length >= 5) {
+                    showValidation(
+                        `✓ Valid Databuild Database!`,
+                        'success',
+                        `Database: ${selectedDb}<br>Tables Validated: ${result.tables.length}/6`
+                    );
+                } else if (result.success) {
+                    showValidation(
+                        `✗ Invalid Database Schema`,
+                        'error',
+                        `This database does not appear to be a valid Databuild system database.<br>Found ${result.tables ? result.tables.length : 0}/6 required tables.`
+                    );
+                } else {
+                    showValidation(
+                        `✗ Connection Failed`,
+                        'error',
+                        result.message
+                    );
+                }
+            } catch (error) {
+                showValidation(
+                    `✗ Validation Error`,
+                    'error',
+                    error.message
+                );
+            }
+        });
 
         // Test connection
         testBtn.addEventListener('click', async () => {

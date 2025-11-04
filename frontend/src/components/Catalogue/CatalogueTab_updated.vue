@@ -830,7 +830,7 @@ onMounted(() => {
     if (event.detail?.itemsPerPage) {
       pageSize.value = event.detail.itemsPerPage;
       if (gridApi.value) {
-        gridApi.value.paginationSetPageSize(pageSize.value);
+        gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
     }
@@ -840,7 +840,7 @@ onMounted(() => {
 // Watch page size changes
 watch(pageSize, () => {
   if (gridApi.value) {
-    gridApi.value.paginationSetPageSize(pageSize.value);
+    gridApi.value.setGridOption('paginationPageSize', pageSize.value);
     loadData();
   }
 });

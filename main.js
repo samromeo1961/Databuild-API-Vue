@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -19,12 +19,15 @@ const templatesStoreHandlers = require('./src/ipc-handlers/templates-store');
 const favouritesStoreHandlers = require('./src/ipc-handlers/favourites-store');
 const recentsStoreHandlers = require('./src/ipc-handlers/recents-store');
 const columnStatesHandlers = require('./src/ipc-handlers/column-states');
+const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
+const credentialsStore = require('./src/database/credentials-store');
 
 // Initialize electron-store for secure settings storage
 const store = new Store();
 
 let mainWindow = null;
 let settingsWindow = null;
+let webView = null; // BrowserView for zzTakeoff webview
 
 /**
  * Create the database settings window
@@ -121,8 +124,105 @@ function createMainWindow() {
       ]
     },
     {
+      label: 'Tabs',
+      submenu: [
+        {
+          label: 'Catalogue',
+          accelerator: 'Ctrl+1',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/catalogue');
+            }
+          }
+        },
+        {
+          label: 'Recipes',
+          accelerator: 'Ctrl+2',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/recipes');
+            }
+          }
+        },
+        {
+          label: 'Suppliers',
+          accelerator: 'Ctrl+3',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/suppliers');
+            }
+          }
+        },
+        {
+          label: 'Contacts',
+          accelerator: 'Ctrl+4',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/contacts');
+            }
+          }
+        },
+        {
+          label: 'Templates',
+          accelerator: 'Ctrl+5',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/templates');
+            }
+          }
+        },
+        {
+          label: 'Favourites',
+          accelerator: 'Ctrl+6',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/favourites');
+            }
+          }
+        },
+        {
+          label: 'Recents',
+          accelerator: 'Ctrl+7',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/recents');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'zzTakeoff API',
+          accelerator: 'Ctrl+8',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/zztakeoff');
+            }
+          }
+        },
+        {
+          label: 'zzTakeoff Web',
+          accelerator: 'Ctrl+9',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('navigate-to', '/zztakeoff-web');
+            }
+          }
+        }
+      ]
+    },
+    {
       label: 'Help',
       submenu: [
+        {
+          label: 'Show Help',
+          accelerator: 'F1',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('show-help');
+            }
+          }
+        },
+        { type: 'separator' },
         {
           label: 'About',
           click: () => {
@@ -130,7 +230,7 @@ function createMainWindow() {
               type: 'info',
               title: 'About DBx Connector Vue',
               message: 'DBx Connector Vue',
-              detail: 'Version: 1.0.0\nVue.js + AG Grid Edition\n\n© 2025 Takeoff and Estimating Pty Ltd'
+              detail: 'Version: 1.0.2\nVue.js + AG Grid Edition\n\n© 2025 Takeoff and Estimating Pty Ltd'
             });
           }
         }
@@ -255,6 +355,10 @@ ipcMain.handle('preferences:get-cost-centre-banks', preferencesHandlers.getCostC
 ipcMain.handle('preferences:get-price-levels', preferencesHandlers.getPriceLevels);
 ipcMain.handle('preferences:get-supplier-groups', preferencesHandlers.getSupplierGroupsList);
 ipcMain.handle('preferences:test-connection', preferencesHandlers.testConnection);
+// Create switch database handler with access to saved config
+ipcMain.handle('preferences:switch-database', preferencesHandlers.createSwitchDatabaseHandler(() => {
+  return store.get('dbConfig');
+}));
 
 // ============================================================
 // IPC Handlers for Cost Centres
@@ -340,6 +444,232 @@ ipcMain.handle('favourites-store:clear', favouritesStoreHandlers.handleClearFavo
 ipcMain.handle('recents-store:get-list', recentsStoreHandlers.handleGetRecents);
 ipcMain.handle('recents-store:add', recentsStoreHandlers.handleAddToRecents);
 ipcMain.handle('recents-store:clear', recentsStoreHandlers.handleClearRecents);
+
+// ============================================================
+// IPC Handlers for zzType Store (Persistent)
+// ============================================================
+
+ipcMain.handle('zztype:get', zzTypeStoreHandlers.getZzType);
+ipcMain.handle('zztype:set', zzTypeStoreHandlers.setZzType);
+ipcMain.handle('zztype:get-all', zzTypeStoreHandlers.getAllZzTypes);
+ipcMain.handle('zztype:delete', zzTypeStoreHandlers.deleteZzType);
+
+// ============================================================
+// IPC Handlers for BrowserView (zzTakeoff Webview)
+// ============================================================
+
+ipcMain.handle('webview:create', async (event, url, bounds) => {
+  try {
+    if (!mainWindow) {
+      return { success: false, message: 'Main window not found' };
+    }
+
+    // If BrowserView already exists, just restore it instead of recreating
+    if (webView) {
+      console.log('BrowserView already exists, restoring...');
+      // Add back to window if it was removed
+      if (!mainWindow.getBrowserViews().includes(webView)) {
+        mainWindow.addBrowserView(webView);
+      }
+      webView.setBounds(bounds);
+      webView.setAutoResize({ width: true, height: true });
+      return { success: true, url: webView.webContents.getURL(), restored: true };
+    }
+
+    // Create new BrowserView with persistent session (first time only)
+    console.log('Creating new BrowserView with persistent session...');
+    webView = new BrowserView({
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        partition: 'persist:zztakeoff', // Persistent session storage
+        webSecurity: true,
+        enableRemoteModule: false
+      }
+    });
+
+    mainWindow.addBrowserView(webView);
+    webView.setBounds(bounds);
+    webView.setAutoResize({ width: true, height: true });
+
+    // Load URL (only for first-time creation)
+    await webView.webContents.loadURL(url);
+
+    // Send navigation events back to renderer
+    webView.webContents.on('did-start-loading', () => {
+      mainWindow.webContents.send('webview:loading', true);
+    });
+
+    webView.webContents.on('did-stop-loading', () => {
+      mainWindow.webContents.send('webview:loading', false);
+    });
+
+    webView.webContents.on('did-navigate', (event, url) => {
+      mainWindow.webContents.send('webview:url-changed', url);
+    });
+
+    webView.webContents.on('did-navigate-in-page', (event, url) => {
+      mainWindow.webContents.send('webview:url-changed', url);
+    });
+
+    webView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      mainWindow.webContents.send('webview:load-error', {
+        errorCode,
+        errorDescription,
+        url: validatedURL
+      });
+    });
+
+    // Listen for find-in-page results
+    webView.webContents.on('found-in-page', (event, result) => {
+      mainWindow.webContents.send('webview:found-in-page', result);
+    });
+
+    return { success: true, url };
+  } catch (error) {
+    console.error('Error creating BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:navigate', async (event, url) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    await webView.webContents.loadURL(url);
+    return { success: true, url };
+  } catch (error) {
+    console.error('Error navigating BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:reload', async (event) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    webView.webContents.reload();
+    return { success: true };
+  } catch (error) {
+    console.error('Error reloading BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:destroy', async (event) => {
+  try {
+    // Don't actually destroy the BrowserView, just hide it to preserve session
+    // This allows the user to stay logged in when navigating back to zzTakeoff Web
+    if (webView && mainWindow) {
+      console.log('Hiding BrowserView (preserving session)...');
+      // Hide by setting bounds to 0
+      webView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      // Remove from window but don't destroy the WebContents
+      mainWindow.removeBrowserView(webView);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error hiding BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:set-bounds', async (event, bounds) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    webView.setBounds(bounds);
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting BrowserView bounds:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:go-back', async (event) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    if (webView.webContents.canGoBack()) {
+      webView.webContents.goBack();
+      return { success: true, canGoBack: true };
+    }
+    return { success: true, canGoBack: false };
+  } catch (error) {
+    console.error('Error going back in BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:go-forward', async (event) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    if (webView.webContents.canGoForward()) {
+      webView.webContents.goForward();
+      return { success: true, canGoForward: true };
+    }
+    return { success: true, canGoForward: false };
+  } catch (error) {
+    console.error('Error going forward in BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:find-in-page', async (event, text, options) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    const requestId = webView.webContents.findInPage(text, options);
+    return { success: true, requestId };
+  } catch (error) {
+    console.error('Error in find-in-page:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:stop-find-in-page', async (event, action) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    webView.webContents.stopFindInPage(action);
+    return { success: true };
+  } catch (error) {
+    console.error('Error stopping find-in-page:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('webview:execute-javascript', async (event, code) => {
+  try {
+    if (!webView) {
+      return { success: false, message: 'Webview not initialized' };
+    }
+
+    console.log('[executeJavaScript] Executing code in BrowserView:', code);
+    const result = await webView.webContents.executeJavaScript(code);
+    console.log('[executeJavaScript] Result:', result);
+    return { success: true, result };
+  } catch (error) {
+    console.error('Error executing JavaScript in BrowserView:', error);
+    return { success: false, message: error.message };
+  }
+});
 
 // ============================================================
 // App Lifecycle

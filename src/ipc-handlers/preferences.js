@@ -1,4 +1,4 @@
-const { getPool } = require('../database/connection');
+const { getPool, switchDatabase } = require('../database/connection');
 
 /**
  * Get available databases on the server
@@ -303,11 +303,53 @@ async function testConnection(event, params) {
   }
 }
 
+/**
+ * Switch to a different database
+ * IPC Handler: 'preferences:switch-database'
+ *
+ * This function is called with a factory pattern from main.js
+ * to provide access to the saved database configuration.
+ */
+function createSwitchDatabaseHandler(getSavedConfig) {
+  return async function handleSwitchDatabase(event, params) {
+    const { database } = params || {};
+
+    if (!database) {
+      return {
+        success: false,
+        message: 'Database name is required'
+      };
+    }
+
+    try {
+      // Get saved config from main.js
+      const savedConfig = getSavedConfig();
+
+      if (!savedConfig) {
+        return {
+          success: false,
+          message: 'No saved database configuration found'
+        };
+      }
+
+      const result = await switchDatabase(database, savedConfig);
+      return result;
+    } catch (err) {
+      console.error('Error switching database:', err);
+      return {
+        success: false,
+        message: `Failed to switch database: ${err.message}`
+      };
+    }
+  };
+}
+
 module.exports = {
   getDatabases,
   getUnits,
   getCostCentreBanks,
   getPriceLevels,
   getSupplierGroupsList,
-  testConnection
+  testConnection,
+  createSwitchDatabaseHandler
 };

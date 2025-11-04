@@ -114,6 +114,97 @@ function getPool() {
 }
 
 /**
+ * Switch to a different database on the same server
+ * @param {string} newDatabase - Name of the new database
+ * @param {Object} savedConfig - Saved database configuration with credentials
+ * @returns {Promise<Object>} Result with success flag
+ */
+async function switchDatabase(newDatabase, savedConfig) {
+  let newPool = null;
+  const oldPool = dbPool;
+
+  try {
+    if (!savedConfig || !savedConfig.server || !savedConfig.user) {
+      return {
+        success: false,
+        message: 'No saved database configuration available'
+      };
+    }
+
+    console.log(`🔄 Switching database to: ${newDatabase}`);
+
+    // Create new configuration with different database
+    const newConfig = {
+      user: savedConfig.user,
+      password: savedConfig.password,
+      server: savedConfig.server,
+      database: newDatabase,
+      options: {
+        encrypt: true,
+        trustServerCertificate: true,
+        enableArithAbort: true,
+        instanceName: savedConfig.server.includes('\\')
+          ? savedConfig.server.split('\\')[1]
+          : undefined
+      },
+      pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000
+      }
+    };
+
+    // Try to connect to new database FIRST before closing old connection
+    newPool = await sql.connect(newConfig);
+    console.log(`✓ Connected to new database: ${newDatabase}`);
+
+    // Only after successful connection, close the old pool and switch
+    if (oldPool) {
+      try {
+        await oldPool.close();
+        console.log('✓ Closed previous database connection');
+      } catch (closeErr) {
+        console.warn('Warning: Error closing old pool:', closeErr.message);
+        // Continue anyway since new connection is established
+      }
+    }
+
+    // Update global pool reference
+    dbPool = newPool;
+    console.log(`✓ Successfully switched to database: ${newDatabase}`);
+
+    return {
+      success: true,
+      message: `Successfully switched to database: ${newDatabase}`,
+      database: newDatabase
+    };
+
+  } catch (error) {
+    console.error('✗ Database switch failed:', error.message);
+
+    // If new connection failed, make sure we still have the old connection
+    if (newPool) {
+      try {
+        await newPool.close();
+      } catch (closeErr) {
+        console.error('Error closing failed new pool:', closeErr.message);
+      }
+    }
+
+    // Ensure old pool is still active
+    if (oldPool && !dbPool) {
+      dbPool = oldPool;
+      console.log('✓ Retained original database connection');
+    }
+
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
+/**
  * Close database connection
  */
 async function close() {
@@ -127,6 +218,7 @@ async function close() {
 module.exports = {
   connect,
   testConnection,
+  switchDatabase,
   getPool,
   close
 };

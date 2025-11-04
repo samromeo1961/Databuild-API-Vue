@@ -53,7 +53,8 @@ export function useElectronAPI() {
       getCostCentreBanks: (params) => window.electronAPI?.preferences.getCostCentreBanks(params),
       getPriceLevels: (params) => window.electronAPI?.preferences.getPriceLevels(params),
       getSupplierGroups: (params) => window.electronAPI?.preferences.getSupplierGroups(params),
-      testConnection: (params) => window.electronAPI?.preferences.testConnection(params)
+      testConnection: (params) => window.electronAPI?.preferences.testConnection(params),
+      switchDatabase: (params) => window.electronAPI?.preferences.switchDatabase(params)
     },
 
     // Cost Centres
@@ -135,6 +136,32 @@ export function useElectronAPI() {
       delete: (tabName) => window.electronAPI?.columnStates.delete(tabName),
       getAll: () => window.electronAPI?.columnStates.getAll(),
       clearAll: () => window.electronAPI?.columnStates.clearAll()
+    },
+
+    // zzType Store (electron-store persistence for item-specific zzType overrides)
+    zzTypeStore: {
+      get: (priceCode) => window.electronAPI?.zzTypeStore.get(priceCode),
+      set: (priceCode, zzType) => window.electronAPI?.zzTypeStore.set(priceCode, zzType),
+      getAll: () => window.electronAPI?.zzTypeStore.getAll(),
+      delete: (priceCode) => window.electronAPI?.zzTypeStore.delete(priceCode)
+    },
+
+    // BrowserView for zzTakeoff Webview
+    webview: {
+      create: (url, bounds) => window.electronAPI?.webview.create(url, bounds),
+      navigate: (url) => window.electronAPI?.webview.navigate(url),
+      reload: () => window.electronAPI?.webview.reload(),
+      destroy: () => window.electronAPI?.webview.destroy(),
+      setBounds: (bounds) => window.electronAPI?.webview.setBounds(bounds),
+      goBack: () => window.electronAPI?.webview.goBack(),
+      goForward: () => window.electronAPI?.webview.goForward(),
+      findInPage: (text, options) => window.electronAPI?.webview.findInPage(text, options),
+      stopFindInPage: (action) => window.electronAPI?.webview.stopFindInPage(action),
+      executeJavaScript: (code) => window.electronAPI?.webview.executeJavaScript(code),
+      onLoading: (callback) => window.electronAPI?.webview.onLoading(callback),
+      onUrlChanged: (callback) => window.electronAPI?.webview.onUrlChanged(callback),
+      onLoadError: (callback) => window.electronAPI?.webview.onLoadError(callback),
+      onFoundInPage: (callback) => window.electronAPI?.webview.onFoundInPage(callback)
     },
 
     // Utility

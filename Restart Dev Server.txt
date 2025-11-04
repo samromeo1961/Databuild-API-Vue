@@ -1,0 +1,10 @@
+  If you want to ensure all old processes are killed first:
+
+  1. Close all Electron/DBx Connector Vue windows
+  2. Open Command Prompt and navigate to project:
+  cd C:\Users\User\OneDrive\Desktop\Databuild-API-Vue
+  3. Kill any lingering Electron processes:
+  taskkill /F /IM electron.exe
+  3. (It's okay if this says "not found" - it means no processes are running)
+  4. Start fresh server:
+  npm run dev

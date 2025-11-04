@@ -27,89 +27,15 @@
           </div>
         </div>
         <div class="col-md-2">
-          <!-- Contact Group Multi-Select Dropdown -->
-          <div class="dropdown w-100">
-            <button
-              class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center"
-              type="button"
-              id="contactGroupDropdown"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-            >
-              <span>
-                {{ selectedGroupsDisplay }}
-              </span>
-            </button>
-            <ul class="dropdown-menu w-100" style="max-height: 350px; overflow-y: auto;">
-              <!-- Search input -->
-              <li class="px-3 py-2" @click.stop>
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text">
-                    <i class="bi bi-search"></i>
-                  </span>
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    placeholder="Search groups..."
-                    v-model="groupSearchTerm"
-                    @click.stop
-                  />
-                  <button
-                    v-if="groupSearchTerm"
-                    class="btn btn-outline-secondary btn-sm"
-                    @click.stop="groupSearchTerm = ''"
-                  >
-                    <i class="bi bi-x"></i>
-                  </button>
-                </div>
-              </li>
-              <li><hr class="dropdown-divider my-1" /></li>
-
-              <!-- Group list -->
-              <template v-if="!groupsLoaded">
-                <li class="px-3 py-2">
-                  <span class="text-muted small">
-                    <i class="bi bi-hourglass-split me-1"></i>Loading groups...
-                  </span>
-                </li>
-              </template>
-              <template v-else-if="displayedContactGroups.length === 0">
-                <li class="px-3 py-2">
-                  <span class="text-muted small">
-                    {{ groupSearchTerm ? 'No groups match your search' : 'No contact groups available' }}
-                  </span>
-                </li>
-              </template>
-              <template v-else>
-                <li v-for="group in displayedContactGroups" :key="group.Code" class="px-3">
-                  <div class="form-check">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      :id="`group-${group.Code}`"
-                      :value="group.Code"
-                      :checked="selectedGroups.includes(group.Code)"
-                      @change="handleGroupToggle(group.Code)"
-                    />
-                    <label class="form-check-label" :for="`group-${group.Code}`">
-                      {{ group.Code }} - {{ group.Name }}
-                    </label>
-                  </div>
-                </li>
-              </template>
-
-              <!-- Clear selection -->
-              <li v-if="selectedGroups.length > 0">
-                <hr class="dropdown-divider" />
-              </li>
-              <li v-if="selectedGroups.length > 0">
-                <a class="dropdown-item text-danger" href="#" @click.prevent="clearGroupFilter">
-                  <i class="bi bi-x-circle me-1"></i>
-                  Clear Selection
-                </a>
-              </li>
-            </ul>
-          </div>
+          <SearchableMultiSelect
+            v-model="selectedGroups"
+            :options="allContactGroups"
+            placeholder="All Contact Groups"
+            :labelKey="(item) => `${item.Code} - ${item.Name}`"
+            valueKey="Code"
+            selectAllLabel="✕ Clear Filters"
+            @change="onGroupChange"
+          />
         </div>
         <div class="col-md-6 d-flex justify-content-end align-items-center gap-3">
           <button
@@ -339,6 +265,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Contact Modal -->
+    <ContactModal
+      ref="contactModalRef"
+      modalId="contactModal"
+      @saved="handleContactSaved"
+    />
   </div>
 </template>
 
@@ -348,6 +281,8 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
+import ContactModal from './ContactModal.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -367,7 +302,6 @@ const pageSizeOptions = [25, 50, 100, 200];
 // Contact Groups state
 const allContactGroups = ref([]);
 const selectedGroups = ref([]);
-const groupSearchTerm = ref('');
 const groupsLoaded = ref(false);
 
 // Column Management Modal
@@ -379,38 +313,14 @@ const managedColumns = ref([]);
 const columnToRename = ref(null);
 const newColumnName = ref('');
 
+// Contact Modal ref
+const contactModalRef = ref(null);
+
 // Check if dark mode
 const isDarkMode = computed(() => {
   return theme && theme.value === 'dark';
 });
 
-// Display text for selected groups
-const selectedGroupsDisplay = computed(() => {
-  if (selectedGroups.value.length === 0) {
-    return 'All Contact Groups';
-  } else if (selectedGroups.value.length === 1) {
-    const group = allContactGroups.value.find(g => g.Code === selectedGroups.value[0]);
-    return group ? `${group.Code} - ${group.Name}` : 'Selected (1)';
-  } else {
-    return `Selected (${selectedGroups.value.length})`;
-  }
-});
-
-// Filtered groups based on search term
-const displayedContactGroups = computed(() => {
-  const groupsToDisplay = allContactGroups.value;
-
-  if (!groupSearchTerm.value) {
-    return groupsToDisplay;
-  }
-
-  const searchLower = groupSearchTerm.value.toLowerCase();
-  return groupsToDisplay.filter(group => {
-    const groupCode = group.Code.toString().toLowerCase();
-    const groupName = (group.Name || '').toLowerCase();
-    return groupCode.includes(searchLower) || groupName.includes(searchLower);
-  });
-});
 
 // Row selection configuration (new v32+ API)
 const rowSelectionConfig = {
@@ -514,6 +424,22 @@ const columnDefs = ref([
     width: 100,
     filter: 'agTextColumnFilter',
     sortable: true
+  },
+  {
+    field: 'actions',
+    headerName: 'Actions',
+    width: 150,
+    pinned: 'right',
+    cellRenderer: (params) => {
+      return `<div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary" data-action="edit" data-contact-code="${params.data.Code}" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </button>
+              </div>`;
+    },
+    suppressHeaderMenuButton: true,
+    sortable: false,
+    filter: false
   }
 ]);
 
@@ -544,20 +470,8 @@ const loadContactGroups = async () => {
   }
 };
 
-// Handle group filter toggle
-const handleGroupToggle = (groupCode) => {
-  const index = selectedGroups.value.indexOf(groupCode);
-  if (index === -1) {
-    selectedGroups.value.push(groupCode);
-  } else {
-    selectedGroups.value.splice(index, 1);
-  }
-  loadData();
-};
-
-// Clear group filter
-const clearGroupFilter = () => {
-  selectedGroups.value = [];
+// Handle contact group change
+const onGroupChange = () => {
   loadData();
 };
 
@@ -619,6 +533,16 @@ const clearSearch = () => {
 const onGridReady = (params) => {
   console.log('[FRONTEND] onGridReady called');
   gridApi.value = params.api;
+
+  // Add click event listener for action buttons
+  params.api.addEventListener('cellClicked', (event) => {
+    const action = event.event.target.dataset.action || event.event.target.closest('[data-action]')?.dataset.action;
+    const contactCode = event.event.target.dataset.contactCode || event.event.target.closest('[data-contact-code]')?.dataset.contactCode;
+
+    if (action === 'edit') {
+      handleEditContact(event);
+    }
+  });
 
   // Add event listeners for column state changes (auto-save)
   params.api.addEventListener('columnResized', (event) => {
@@ -910,13 +834,25 @@ const applyColumnRename = () => {
 
 // Add contact
 const handleAddContact = () => {
-  alert('Add new contact - functionality coming soon!');
+  if (contactModalRef.value) {
+    contactModalRef.value.showAdd();
+  }
 };
 
 // Edit contact
 const handleEditContact = (event) => {
-  const contact = event.data;
-  alert(`Edit contact: ${contact.Name} (${contact.Code}) - functionality coming soon!`);
+  if (contactModalRef.value && event.data) {
+    contactModalRef.value.showEdit(event.data);
+  }
+};
+
+// Handle contact saved
+const handleContactSaved = (savedContact) => {
+  console.log('[DEBUG] Contact saved:', savedContact);
+  success.value = 'Contact saved successfully';
+  setTimeout(() => success.value = null, 3000);
+  // Reload data to show updated contact
+  loadData();
 };
 
 // Export to Excel
@@ -959,7 +895,7 @@ onMounted(() => {
     if (event.detail?.itemsPerPage) {
       pageSize.value = event.detail.itemsPerPage;
       if (gridApi.value) {
-        gridApi.value.paginationSetPageSize(pageSize.value);
+        gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
     }

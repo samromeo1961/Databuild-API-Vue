@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSMS Database Setup Guide - DBx Connector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 2rem 0;
+        }
+        .container {
+            max-width: 900px;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #667eea;
+        }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            color: #495057;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .table-permissions {
+            font-size: 0.9rem;
+        }
+        .print-hide {
+            display: block;
+        }
+        @media print {
+            .print-hide {
+                display: none;
+            }
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="bi bi-database-fill-gear me-2"></i>SQL Server Setup Guide</h1>
+            <p class="mb-0">Database Administrator Guide for DBx Connector Vue</p>
+        </div>
+
+        <div class="print-hide mb-3">
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="bi bi-printer me-2"></i>Print Guide
+            </button>
+            <button onclick="window.close()" class="btn btn-secondary">
+                <i class="bi bi-x-circle me-2"></i>Close
+            </button>
+        </div>
+
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Purpose:</strong> This guide helps database administrators set up SQL Server user accounts and permissions
+            required for DBx Connector Vue to access your Databuild database.
+        </div>
+
+        <!-- Overview -->
+        <h2><i class="bi bi-list-check me-2"></i>Overview</h2>
+        <p>DBx Connector Vue requires a SQL Server login with appropriate permissions to access your Databuild database.
+        This guide covers:</p>
+        <ul>
+            <li>Verifying required SQL Server services are running</li>
+            <li>Creating a dedicated SQL Server login</li>
+            <li>Mapping the login to your Databuild database</li>
+            <li>Granting necessary permissions</li>
+            <li>Security best practices</li>
+            <li>Testing the connection</li>
+        </ul>
+
+        <!-- Prerequisites: Required Services -->
+        <h2><i class="bi bi-gear-fill me-2"></i>Prerequisites: Required SQL Server Services</h2>
+
+        <div class="step">
+            <h3>Windows Services That Must Be Running</h3>
+            <p>Before DBx Connector can connect, these Windows services must be running on the SQL Server machine:</p>
+
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40%">Service Name</th>
+                        <th style="width: 20%">Required?</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-danger">
+                        <td><strong>SQL Server (MSSQLSERVER)</strong><br><small class="text-muted">or SQL Server (INSTANCENAME)</small></td>
+                        <td><span class="badge bg-danger">Required</span></td>
+                        <td>Main database engine service. Without this, no SQL Server connections are possible.</td>
+                    </tr>
+                    <tr class="table-warning">
+                        <td><strong>SQL Server Browser</strong></td>
+                        <td><span class="badge bg-warning">Recommended</span></td>
+                        <td>Required for named instances (e.g., SERVER\SQLEXPRESS). Helps clients locate the correct SQL Server instance and port number.</td>
+                    </tr>
+                    <tr class="table-info">
+                        <td><strong>SQL Server Agent (MSSQLSERVER)</strong><br><small class="text-muted">or SQL Server Agent (INSTANCENAME)</small></td>
+                        <td><span class="badge bg-secondary">Optional</span></td>
+                        <td>Runs scheduled jobs and maintenance tasks. Not required for DBx Connector connections.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="mt-4">How to Check Service Status</h3>
+            <p><strong>Method 1: Services Management Console</strong></p>
+            <ol>
+                <li>Press <kbd>Win + R</kbd></li>
+                <li>Type <code>services.msc</code> and press Enter</li>
+                <li>Look for "SQL Server" services in the list</li>
+                <li>Check the "Status" column - should say "Running"</li>
+                <li>Check the "Startup Type" column - should be "Automatic" or "Automatic (Delayed Start)"</li>
+            </ol>
+
+            <div class="warning mt-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Named Instances:</strong> If you have a named instance (e.g., SQLEXPRESS), the service will be named
+                "SQL Server (SQLEXPRESS)" instead of "SQL Server (MSSQLSERVER)".
+            </div>
+
+            <p class="mt-3"><strong>Method 2: SQL Server Configuration Manager</strong></p>
+            <ol>
+                <li>Open "SQL Server Configuration Manager" (search in Start Menu)</li>
+                <li>Expand "SQL Server Services" in the left panel</li>
+                <li>Verify the following services are running:</li>
+            </ol>
+            <ul>
+                <li><i class="bi bi-check-circle-fill text-success me-2"></i>SQL Server (MSSQLSERVER) or SQL Server (INSTANCENAME) - <strong>Running</strong></li>
+                <li><i class="bi bi-check-circle-fill text-success me-2"></i>SQL Server Browser - <strong>Running</strong> (for named instances)</li>
+            </ul>
+
+            <h3 class="mt-4">How to Start a Stopped Service</h3>
+            <p><strong>Using Services Management Console:</strong></p>
+            <ol>
+                <li>Right-click the service name</li>
+                <li>Select "Start"</li>
+                <li>Wait for status to change to "Running"</li>
+                <li>To make it start automatically, right-click → Properties → Startup type: "Automatic"</li>
+            </ol>
+
+            <p class="mt-3"><strong>Using SQL Server Configuration Manager:</strong></p>
+            <ol>
+                <li>Right-click the service</li>
+                <li>Select "Start"</li>
+                <li>To configure automatic startup: Right-click → Properties → Service tab → Start Mode: "Automatic"</li>
+            </ol>
+
+            <p class="mt-3"><strong>Using Command Line (as Administrator):</strong></p>
+            <div class="code-block">
+# Start SQL Server (default instance)
+net start MSSQLSERVER
+
+# Start SQL Server (named instance - replace SQLEXPRESS with your instance name)
+net start MSSQL$SQLEXPRESS
+
+# Start SQL Server Browser
+net start SQLBrowser
+
+# Check service status
+sc query MSSQLSERVER
+sc query SQLBrowser
+            </div>
+
+            <div class="info mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Tip:</strong> If services fail to start, check Windows Event Viewer (Application and System logs)
+                for error messages. Common issues include:
+                <ul class="mt-2 mb-0">
+                    <li>Insufficient permissions (service account)</li>
+                    <li>Port already in use (default: 1433)</li>
+                    <li>Database files are locked or corrupted</li>
+                    <li>Insufficient disk space</li>
+                </ul>
+            </div>
+
+            <h3 class="mt-4">Verify Network Connectivity</h3>
+            <p>After ensuring services are running, verify network connectivity:</p>
+            <div class="code-block">
+# Test if SQL Server port is accessible (replace SERVER with your server name)
+# Default port is 1433
+Test-NetConnection -ComputerName SERVER -Port 1433
+
+# Or using telnet (if enabled)
+telnet SERVER 1433
+            </div>
+
+            <div class="success mt-3">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>Success:</strong> If you see "TcpTestSucceeded : True" or a blank telnet screen,
+                SQL Server is accepting connections on that port.
+            </div>
+        </div>
+
+        <!-- Step 1: Create SQL Server Login -->
+        <h2><i class="bi bi-1-circle me-2"></i>Step 1: Create SQL Server Login</h2>
+
+        <div class="step">
+            <h3>Option A: SQL Server Authentication (Recommended for DBx Connector)</h3>
+            <p>Open SQL Server Management Studio (SSMS) and connect to your server. Run the following T-SQL script:</p>
+
+            <div class="code-block">
+-- Create a new SQL Server login for DBx Connector
+USE [master];
+GO
+
+CREATE LOGIN [dbx_connector_user]
+WITH PASSWORD = 'YourSecurePassword123!',
+     DEFAULT_DATABASE = [T_Esys],  -- Replace with your Databuild database name
+     CHECK_EXPIRATION = OFF,
+     CHECK_POLICY = ON;
+GO
+            </div>
+
+            <div class="warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Important:</strong> Replace <code>YourSecurePassword123!</code> with a strong, unique password.
+                Store this password securely - you'll need it when configuring DBx Connector.
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Option B: Windows Authentication</h3>
+            <p>If using Windows Authentication with a service account:</p>
+
+            <div class="code-block">
+-- Create Windows authenticated login
+USE [master];
+GO
+
+CREATE LOGIN [DOMAIN\ServiceAccountName]
+FROM WINDOWS
+WITH DEFAULT_DATABASE = [T_Esys];  -- Replace with your Databuild database name
+GO
+            </div>
+
+            <div class="info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Note:</strong> Windows Authentication requires the DBx Connector application to run under
+                the specified Windows account. SQL Server Authentication is simpler for desktop applications.
+            </div>
+        </div>
+
+        <!-- Step 2: Create Database User -->
+        <h2><i class="bi bi-2-circle me-2"></i>Step 2: Create Database User</h2>
+
+        <div class="step">
+            <p>Map the login to your Databuild database and create a database user:</p>
+
+            <div class="code-block">
+-- Switch to your Databuild database
+USE [T_Esys];  -- Replace with your Databuild database name
+GO
+
+-- Create database user mapped to the login
+CREATE USER [dbx_connector_user]
+FOR LOGIN [dbx_connector_user];
+GO
+            </div>
+        </div>
+
+        <!-- Step 3: Grant Permissions -->
+        <h2><i class="bi bi-3-circle me-2"></i>Step 3: Grant Database Permissions</h2>
+
+        <div class="step">
+            <h3>Required Permissions by Feature</h3>
+            <p>Grant permissions based on what features users need:</p>
+
+            <table class="table table-bordered table-permissions mt-3">
+                <thead class="table-light">
+                    <tr>
+                        <th>Feature</th>
+                        <th>Tables</th>
+                        <th>Permissions Needed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Catalogue (Read)</strong></td>
+                        <td>PriceList, CostCentres, PerCodes, Prices</td>
+                        <td>SELECT</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Catalogue (Edit)</strong></td>
+                        <td>PriceList, Prices</td>
+                        <td>SELECT, UPDATE, INSERT</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Recipes</strong></td>
+                        <td>Recipe, PriceList, CostCentres, PerCodes</td>
+                        <td>SELECT, UPDATE, INSERT, DELETE</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Suppliers</strong></td>
+                        <td>Supplier, SupplierGroup, SuppliersPrices</td>
+                        <td>SELECT, UPDATE, INSERT</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Contacts</strong></td>
+                        <td>Contacts, ContactGroup</td>
+                        <td>SELECT, UPDATE, INSERT</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Templates</strong></td>
+                        <td>PriceList</td>
+                        <td>SELECT</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="mt-4">Recommended: Grant db_datareader and db_datawriter Roles</h3>
+            <p>For full application functionality, grant read and write access:</p>
+
+            <div class="code-block">
+-- Grant read and write permissions
+USE [T_Esys];  -- Replace with your Databuild database name
+GO
+
+-- Add user to db_datareader role (SELECT on all tables)
+ALTER ROLE [db_datareader] ADD MEMBER [dbx_connector_user];
+GO
+
+-- Add user to db_datawriter role (INSERT, UPDATE, DELETE on all tables)
+ALTER ROLE [db_datawriter] ADD MEMBER [dbx_connector_user];
+GO
+            </div>
+
+            <div class="success">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>Recommended Approach:</strong> The db_datareader and db_datawriter roles provide all necessary
+                permissions for DBx Connector while following SQL Server security best practices.
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Alternative: Grant Granular Permissions</h3>
+            <p>For tighter security, grant permissions only on specific tables:</p>
+
+            <div class="code-block">
+-- Grant granular permissions (more restrictive)
+USE [T_Esys];  -- Replace with your Databuild database name
+GO
+
+-- Read access to all required tables
+GRANT SELECT ON dbo.PriceList TO [dbx_connector_user];
+GRANT SELECT ON dbo.CostCentres TO [dbx_connector_user];
+GRANT SELECT ON dbo.PerCodes TO [dbx_connector_user];
+GRANT SELECT ON dbo.Prices TO [dbx_connector_user];
+GRANT SELECT ON dbo.Recipe TO [dbx_connector_user];
+GRANT SELECT ON dbo.Supplier TO [dbx_connector_user];
+GRANT SELECT ON dbo.SupplierGroup TO [dbx_connector_user];
+GRANT SELECT ON dbo.SuppliersPrices TO [dbx_connector_user];
+GRANT SELECT ON dbo.Contacts TO [dbx_connector_user];
+GRANT SELECT ON dbo.ContactGroup TO [dbx_connector_user];
+GRANT SELECT ON dbo.CCBanks TO [dbx_connector_user];
+
+-- Write access for editable features
+GRANT UPDATE, INSERT ON dbo.PriceList TO [dbx_connector_user];
+GRANT UPDATE, INSERT ON dbo.Prices TO [dbx_connector_user];
+GRANT UPDATE, INSERT, DELETE ON dbo.Recipe TO [dbx_connector_user];
+GRANT UPDATE, INSERT ON dbo.Supplier TO [dbx_connector_user];
+GRANT UPDATE, INSERT ON dbo.Contacts TO [dbx_connector_user];
+GO
+            </div>
+        </div>
+
+        <!-- Step 4: Verify Setup -->
+        <h2><i class="bi bi-4-circle me-2"></i>Step 4: Verify Login and Permissions</h2>
+
+        <div class="step">
+            <h3>Test the Login</h3>
+            <p>Verify the login was created successfully:</p>
+
+            <div class="code-block">
+-- Verify login exists
+SELECT name, type_desc, default_database_name, is_disabled
+FROM sys.server_principals
+WHERE name = 'dbx_connector_user';
+GO
+            </div>
+
+            <h3 class="mt-4">Test Database User and Permissions</h3>
+            <div class="code-block">
+-- Switch to Databuild database
+USE [T_Esys];  -- Replace with your Databuild database name
+GO
+
+-- Verify user exists
+SELECT name, type_desc
+FROM sys.database_principals
+WHERE name = 'dbx_connector_user';
+GO
+
+-- Check role memberships
+SELECT
+    dp.name AS UserName,
+    dr.name AS RoleName
+FROM sys.database_principals dp
+LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+LEFT JOIN sys.database_principals dr ON drm.role_principal_id = dr.principal_id
+WHERE dp.name = 'dbx_connector_user';
+GO
+
+-- List specific table permissions
+SELECT
+    pr.name AS UserName,
+    o.name AS TableName,
+    p.permission_name,
+    p.state_desc
+FROM sys.database_permissions p
+INNER JOIN sys.database_principals pr ON p.grantee_principal_id = pr.principal_id
+INNER JOIN sys.objects o ON p.major_id = o.object_id
+WHERE pr.name = 'dbx_connector_user'
+ORDER BY o.name, p.permission_name;
+GO
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Test Connection with SSMS</h3>
+            <ol>
+                <li>Open a new connection in SSMS</li>
+                <li>Choose SQL Server Authentication</li>
+                <li>Enter Login: <code>dbx_connector_user</code></li>
+                <li>Enter the password you created</li>
+                <li>Click "Connect"</li>
+                <li>Run a test query:</li>
+            </ol>
+
+            <div class="code-block">
+-- Test query
+USE [T_Esys];  -- Replace with your Databuild database name
+GO
+
+SELECT TOP 10
+    PriceCode,
+    Description,
+    CostCentre
+FROM PriceList
+WHERE Archived = 0;
+GO
+            </div>
+
+            <div class="success">
+                <i class="bi bi-check-circle me-2"></i>
+                If the query returns results, your login is configured correctly!
+            </div>
+        </div>
+
+        <!-- Connection String Info -->
+        <h2><i class="bi bi-5-circle me-2"></i>Step 5: Configure DBx Connector</h2>
+
+        <div class="step">
+            <h3>Connection Information for DBx Connector</h3>
+            <p>When configuring DBx Connector, use these settings:</p>
+
+            <table class="table table-bordered">
+                <tr>
+                    <th style="width: 30%">Server</th>
+                    <td>Your SQL Server name (e.g., <code>localhost</code>, <code>SERVER\SQLEXPRESS</code>, or IP address)</td>
+                </tr>
+                <tr>
+                    <th>Database</th>
+                    <td>Your Databuild database name (e.g., <code>T_Esys</code>)</td>
+                </tr>
+                <tr>
+                    <th>Authentication</th>
+                    <td>SQL Server Authentication</td>
+                </tr>
+                <tr>
+                    <th>Username</th>
+                    <td><code>dbx_connector_user</code></td>
+                </tr>
+                <tr>
+                    <th>Password</th>
+                    <td>The password you set in Step 1</td>
+                </tr>
+            </table>
+
+            <div class="info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Port Number:</strong> If your SQL Server uses a non-standard port, you may need to specify it
+                in the server name (e.g., <code>SERVER\SQLEXPRESS,1433</code>).
+            </div>
+        </div>
+
+        <!-- Security Best Practices -->
+        <h2><i class="bi bi-shield-check me-2"></i>Security Best Practices</h2>
+
+        <div class="step">
+            <h3>Password Security</h3>
+            <ul>
+                <li><i class="bi bi-check2 text-success me-2"></i>Use a strong password with uppercase, lowercase, numbers, and special characters</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Minimum 12 characters recommended</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Store passwords in a secure password manager</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Don't share the password via email or unsecured channels</li>
+            </ul>
+
+            <h3>Permission Principle of Least Privilege</h3>
+            <ul>
+                <li><i class="bi bi-check2 text-success me-2"></i>Grant only the permissions users actually need</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>If users only view data, use <code>db_datareader</code> only</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Avoid granting <code>db_owner</code> or <code>sysadmin</code> roles</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Review permissions periodically</li>
+            </ul>
+
+            <h3>Network Security</h3>
+            <ul>
+                <li><i class="bi bi-check2 text-success me-2"></i>Enable SQL Server encryption if transmitting over network</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Use firewall rules to restrict SQL Server access</li>
+                <li><i class="bi bi-check2 text-success me-2"></i>Consider VPN for remote connections</li>
+            </ul>
+
+            <h3>Auditing</h3>
+            <div class="code-block">
+-- Enable login auditing
+USE [master];
+GO
+
+-- Track failed login attempts
+EXEC xp_instance_regwrite
+    N'HKEY_LOCAL_MACHINE',
+    N'Software\Microsoft\MSSQLServer\MSSQLServer',
+    N'AuditLevel',
+    REG_DWORD,
+    2;  -- 0=None, 1=Success, 2=Failure, 3=Both
+GO
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <h2><i class="bi bi-tools me-2"></i>Troubleshooting</h2>
+
+        <div class="step">
+            <h3>Cannot Connect to SQL Server</h3>
+            <div class="warning">
+                <strong>Error:</strong> "Login failed for user 'dbx_connector_user'"
+            </div>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify SQL Server Authentication is enabled (not just Windows Authentication)</li>
+                <li>Check the password is correct</li>
+                <li>Confirm the login exists: <code>SELECT * FROM sys.server_principals WHERE name = 'dbx_connector_user'</code></li>
+                <li>Ensure the login is not disabled</li>
+            </ul>
+
+            <h3 class="mt-4">Enable SQL Server Authentication</h3>
+            <p>If SQL Server is set to Windows Authentication only:</p>
+            <ol>
+                <li>In SSMS, right-click your server → Properties</li>
+                <li>Go to Security page</li>
+                <li>Under "Server authentication", select "SQL Server and Windows Authentication mode"</li>
+                <li>Click OK</li>
+                <li>Restart SQL Server service</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>Permission Denied Errors</h3>
+            <div class="warning">
+                <strong>Error:</strong> "The SELECT permission was denied on the object 'PriceList'"
+            </div>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify user is member of <code>db_datareader</code> role</li>
+                <li>Check specific table permissions were granted</li>
+                <li>Ensure you're connected to the correct database</li>
+                <li>Run the permission verification queries from Step 4</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>Cannot Find Server</h3>
+            <div class="warning">
+                <strong>Error:</strong> "A network-related or instance-specific error occurred"
+            </div>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify SQL Server Browser service is running (for named instances)</li>
+                <li>Enable TCP/IP protocol in SQL Server Configuration Manager</li>
+                <li>Check Windows Firewall allows SQL Server (port 1433 by default)</li>
+                <li>Verify the server name and instance name are correct</li>
+                <li>Try IP address instead of server name</li>
+            </ul>
+
+            <h3 class="mt-4">Enable TCP/IP Protocol</h3>
+            <ol>
+                <li>Open SQL Server Configuration Manager</li>
+                <li>Expand SQL Server Network Configuration</li>
+                <li>Click "Protocols for [Instance Name]"</li>
+                <li>Right-click TCP/IP → Enable</li>
+                <li>Restart SQL Server service</li>
+            </ol>
+        </div>
+
+        <!-- Complete Script -->
+        <h2><i class="bi bi-file-earmark-code me-2"></i>Complete Setup Script</h2>
+
+        <div class="step">
+            <p>Copy and run this complete script (customize values as needed):</p>
+
+            <div class="code-block">
+-- ========================================
+-- DBx Connector Vue - Database Setup Script
+-- ========================================
+-- INSTRUCTIONS:
+-- 1. Replace 'YourSecurePassword123!' with your password
+-- 2. Replace 'T_Esys' with your Databuild database name
+-- 3. Run this script in SSMS as a user with sysadmin privileges
+-- ========================================
+
+USE [master];
+GO
+
+-- Create login
+PRINT 'Creating login...';
+CREATE LOGIN [dbx_connector_user]
+WITH PASSWORD = 'YourSecurePassword123!',  -- CHANGE THIS!
+     DEFAULT_DATABASE = [T_Esys],           -- CHANGE THIS!
+     CHECK_EXPIRATION = OFF,
+     CHECK_POLICY = ON;
+GO
+
+-- Switch to Databuild database
+USE [T_Esys];  -- CHANGE THIS!
+GO
+
+-- Create database user
+PRINT 'Creating database user...';
+CREATE USER [dbx_connector_user]
+FOR LOGIN [dbx_connector_user];
+GO
+
+-- Grant permissions
+PRINT 'Granting permissions...';
+ALTER ROLE [db_datareader] ADD MEMBER [dbx_connector_user];
+ALTER ROLE [db_datawriter] ADD MEMBER [dbx_connector_user];
+GO
+
+-- Verify setup
+PRINT 'Verifying setup...';
+SELECT
+    'Login Created' AS Status,
+    name AS LoginName,
+    type_desc AS Type,
+    default_database_name AS DefaultDB
+FROM sys.server_principals
+WHERE name = 'dbx_connector_user';
+
+USE [T_Esys];  -- CHANGE THIS!
+GO
+
+SELECT
+    'User Created' AS Status,
+    dp.name AS UserName,
+    STRING_AGG(dr.name, ', ') AS Roles
+FROM sys.database_principals dp
+LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+LEFT JOIN sys.database_principals dr ON drm.role_principal_id = dr.principal_id
+WHERE dp.name = 'dbx_connector_user'
+GROUP BY dp.name;
+GO
+
+PRINT 'Setup complete! Test the connection with:';
+PRINT '  Server: [Your SQL Server Name]';
+PRINT '  Database: T_Esys';
+PRINT '  Username: dbx_connector_user';
+PRINT '  Password: [Your Password]';
+GO
+            </div>
+        </div>
+
+        <!-- Support -->
+        <h2><i class="bi bi-question-circle me-2"></i>Need Help?</h2>
+
+        <div class="info">
+            <h5>DBx Connector Vue Help Resources:</h5>
+            <ul class="mb-0">
+                <li>In the application, click <strong>Help → Help</strong> or press <kbd>F1</kbd></li>
+                <li>Check the Settings window for connection test feature</li>
+                <li>Review SQL Server error logs for detailed error messages</li>
+            </ul>
+        </div>
+
+        <div class="mt-4 text-muted small">
+            <hr>
+            <p class="mb-1"><strong>DBx Connector Vue v1.0.3</strong> - Databuild Database Management</p>
+            <p class="mb-0">Document Version 1.0.3 | Last Updated: November 4, 2025</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

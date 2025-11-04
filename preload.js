@@ -47,7 +47,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getCostCentreBanks: (params) => ipcRenderer.invoke('preferences:get-cost-centre-banks', params),
     getPriceLevels: (params) => ipcRenderer.invoke('preferences:get-price-levels', params),
     getSupplierGroups: (params) => ipcRenderer.invoke('preferences:get-supplier-groups', params),
-    testConnection: (params) => ipcRenderer.invoke('preferences:test-connection', params)
+    testConnection: (params) => ipcRenderer.invoke('preferences:test-connection', params),
+    switchDatabase: (params) => ipcRenderer.invoke('preferences:switch-database', params)
   },
 
   // Cost Centres
@@ -125,5 +126,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (tabName) => ipcRenderer.invoke('column-states:delete', tabName),
     getAll: () => ipcRenderer.invoke('column-states:get-all'),
     clearAll: () => ipcRenderer.invoke('column-states:clear-all')
-  }
+  },
+
+  // zzType Store (electron-store persistent storage for item-specific zzType overrides)
+  zzTypeStore: {
+    get: (priceCode) => ipcRenderer.invoke('zztype:get', priceCode),
+    set: (priceCode, zzType) => ipcRenderer.invoke('zztype:set', { priceCode, zzType }),
+    getAll: () => ipcRenderer.invoke('zztype:get-all'),
+    delete: (priceCode) => ipcRenderer.invoke('zztype:delete', priceCode)
+  },
+
+  // BrowserView for zzTakeoff Webview
+  webview: {
+    create: (url, bounds) => ipcRenderer.invoke('webview:create', url, bounds),
+    navigate: (url) => ipcRenderer.invoke('webview:navigate', url),
+    reload: () => ipcRenderer.invoke('webview:reload'),
+    destroy: () => ipcRenderer.invoke('webview:destroy'),
+    setBounds: (bounds) => ipcRenderer.invoke('webview:set-bounds', bounds),
+    goBack: () => ipcRenderer.invoke('webview:go-back'),
+    goForward: () => ipcRenderer.invoke('webview:go-forward'),
+    findInPage: (text, options) => ipcRenderer.invoke('webview:find-in-page', text, options),
+    stopFindInPage: (action) => ipcRenderer.invoke('webview:stop-find-in-page', action),
+    executeJavaScript: (code) => ipcRenderer.invoke('webview:execute-javascript', code),
+    // Event listeners for webview events
+    onLoading: (callback) => ipcRenderer.on('webview:loading', (event, isLoading) => callback(isLoading)),
+    onUrlChanged: (callback) => ipcRenderer.on('webview:url-changed', (event, url) => callback(url)),
+    onLoadError: (callback) => ipcRenderer.on('webview:load-error', (event, error) => callback(error)),
+    onFoundInPage: (callback) => ipcRenderer.on('webview:found-in-page', (event, result) => callback(result))
+  },
+
+  // Event listeners
+  onShowHelp: (callback) => ipcRenderer.on('show-help', callback),
+  onNavigateTo: (callback) => ipcRenderer.on('navigate-to', (event, path) => callback(path))
 });

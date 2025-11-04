@@ -732,7 +732,7 @@ onMounted(() => {
     if (event.detail?.itemsPerPage) {
       pageSize.value = event.detail.itemsPerPage;
       if (gridApi.value) {
-        gridApi.value.paginationSetPageSize(pageSize.value);
+        gridApi.value.setGridOption('paginationPageSize', pageSize.value);
       }
     }
   });

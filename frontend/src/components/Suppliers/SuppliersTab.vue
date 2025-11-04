@@ -27,89 +27,15 @@
           </div>
         </div>
         <div class="col-md-2">
-          <!-- Supplier Group Multi-Select Dropdown -->
-          <div class="dropdown w-100">
-            <button
-              class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center"
-              type="button"
-              id="supplierGroupDropdown"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-            >
-              <span>
-                {{ selectedGroupsDisplay }}
-              </span>
-            </button>
-            <ul class="dropdown-menu w-100" style="max-height: 350px; overflow-y: auto;">
-              <!-- Search input -->
-              <li class="px-3 py-2" @click.stop>
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text">
-                    <i class="bi bi-search"></i>
-                  </span>
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    placeholder="Search groups..."
-                    v-model="groupSearchTerm"
-                    @click.stop
-                  />
-                  <button
-                    v-if="groupSearchTerm"
-                    class="btn btn-outline-secondary btn-sm"
-                    @click.stop="groupSearchTerm = ''"
-                  >
-                    <i class="bi bi-x"></i>
-                  </button>
-                </div>
-              </li>
-              <li><hr class="dropdown-divider my-1" /></li>
-
-              <!-- Group list -->
-              <template v-if="!groupsLoaded">
-                <li class="px-3 py-2">
-                  <span class="text-muted small">
-                    <i class="bi bi-hourglass-split me-1"></i>Loading groups...
-                  </span>
-                </li>
-              </template>
-              <template v-else-if="displayedSupplierGroups.length === 0">
-                <li class="px-3 py-2">
-                  <span class="text-muted small">
-                    {{ groupSearchTerm ? 'No groups match your search' : 'No supplier groups available' }}
-                  </span>
-                </li>
-              </template>
-              <template v-else>
-                <li v-for="group in displayedSupplierGroups" :key="group.GroupNumber" class="px-3">
-                  <div class="form-check">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      :id="`group-${group.GroupNumber}`"
-                      :value="group.GroupNumber"
-                      :checked="selectedGroups.includes(group.GroupNumber)"
-                      @change="handleGroupToggle(group.GroupNumber)"
-                    />
-                    <label class="form-check-label" :for="`group-${group.GroupNumber}`">
-                      {{ group.GroupNumber }} - {{ group.GroupName }}
-                    </label>
-                  </div>
-                </li>
-              </template>
-
-              <!-- Clear selection -->
-              <li v-if="selectedGroups.length > 0">
-                <hr class="dropdown-divider" />
-              </li>
-              <li v-if="selectedGroups.length > 0">
-                <a class="dropdown-item text-danger" href="#" @click.prevent="clearGroupFilter">
-                  <i class="bi bi-x-circle me-1"></i>
-                  Clear Selection
-                </a>
-              </li>
-            </ul>
-          </div>
+          <SearchableMultiSelect
+            v-model="selectedGroups"
+            :options="allSupplierGroups"
+            placeholder="All Supplier Groups"
+            :labelKey="(item) => `${item.GroupNumber} - ${item.GroupName}`"
+            valueKey="GroupNumber"
+            selectAllLabel="✕ Clear Filters"
+            @change="onGroupChange"
+          />
         </div>
         <div class="col-md-6 d-flex justify-content-end align-items-center gap-2">
           <!-- Show Archived Toggle -->
@@ -369,6 +295,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -392,7 +319,6 @@ const filteredSupplierGroups = ref([]);
 const selectedGroups = ref([]);
 const showArchived = ref(false);
 const allSupplierGroups = ref([]);  // Store all groups for dropdown
-const groupSearchTerm = ref('');  // Search term for group dropdown
 const groupsLoaded = ref(false);  // Track if groups have been loaded
 
 // Column Management Modal
@@ -409,42 +335,6 @@ const isDarkMode = computed(() => {
   return theme && theme.value === 'dark';
 });
 
-// Display text for selected groups
-const selectedGroupsDisplay = computed(() => {
-  if (selectedGroups.value.length === 0) {
-    return 'All Supplier Groups';
-  } else if (selectedGroups.value.length === 1) {
-    const group = allSupplierGroups.value.find(g => g.GroupNumber === selectedGroups.value[0]);
-    return group ? `${group.GroupNumber} - ${group.GroupName}` : 'Selected (1)';
-  } else {
-    return `Selected (${selectedGroups.value.length})`;
-  }
-});
-
-// Filtered groups based on search term (shows ALL groups in dropdown)
-const displayedSupplierGroups = computed(() => {
-  console.log('[FRONTEND] displayedSupplierGroups computed called');
-  console.log('[FRONTEND] allSupplierGroups.value:', allSupplierGroups.value);
-  console.log('[FRONTEND] groupSearchTerm.value:', groupSearchTerm.value);
-
-  // Use allSupplierGroups to show ALL available groups in dropdown
-  const groupsToDisplay = allSupplierGroups.value;
-  console.log('[FRONTEND] groupsToDisplay:', groupsToDisplay);
-
-  if (!groupSearchTerm.value) {
-    console.log('[FRONTEND] No search term, returning all groups:', groupsToDisplay);
-    return groupsToDisplay;
-  }
-
-  const searchLower = groupSearchTerm.value.toLowerCase();
-  const filtered = groupsToDisplay.filter(group => {
-    const groupNumber = group.GroupNumber.toString().toLowerCase();
-    const groupName = (group.GroupName || '').toLowerCase();
-    return groupNumber.includes(searchLower) || groupName.includes(searchLower);
-  });
-  console.log('[FRONTEND] Filtered groups:', filtered);
-  return filtered;
-});
 
 // Row selection configuration (new v32+ API)
 const rowSelectionConfig = {
@@ -616,6 +506,9 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
     console.log('[FRONTEND] loadSupplierGroups called');
     const response = await api.suppliers.getGroups();
     console.log('[FRONTEND] Supplier groups response:', response);
+    console.log('[FRONTEND] Response type:', typeof response);
+    console.log('[FRONTEND] Response keys:', response ? Object.keys(response) : 'null');
+
     const groups = response?.data || [];
     console.log('[FRONTEND] Parsed groups:', groups);
     console.log('[FRONTEND] Number of groups:', groups.length);
@@ -624,6 +517,7 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
     allSupplierGroups.value = groups;
     groupsLoaded.value = true;  // Mark as loaded
     console.log('[FRONTEND] allSupplierGroups.value set to:', allSupplierGroups.value);
+    console.log('[FRONTEND] groupsLoaded.value:', groupsLoaded.value);
 
     // Get user preferences and filter groups
     let prefs;
@@ -635,12 +529,14 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
     }
 
     const selectedGroupNumbers = prefs.supplierSubGroups || [2]; // Default to group 2
+    console.log('[FRONTEND] Selected group numbers from prefs:', selectedGroupNumbers);
 
     // Filter to only show groups selected in preferences
     const filtered = groups.filter(group =>
       selectedGroupNumbers.includes(group.GroupNumber)
     );
     filteredSupplierGroups.value = filtered;
+    console.log('[FRONTEND] Filtered groups for grid:', filtered);
 
     // Update column def with group names for dropdown
     const groupColumn = columnDefs.value.find(col => col.field === 'SupplierGroupName');
@@ -648,7 +544,8 @@ const loadSupplierGroups = async (preferencesOverride = null) => {
       groupColumn.cellEditorParams.values = groups.map(g => `${g.GroupNumber} - ${g.GroupName}`);
     }
   } catch (err) {
-    console.error('Error loading supplier groups:', err);
+    console.error('[FRONTEND ERROR] Error loading supplier groups:', err);
+    console.error('[FRONTEND ERROR] Error stack:', err.stack);
   }
 };
 
@@ -716,20 +613,8 @@ const clearSearch = () => {
   loadData();
 };
 
-// Handle supplier group toggle
-const handleGroupToggle = (groupNumber) => {
-  if (selectedGroups.value.includes(groupNumber)) {
-    selectedGroups.value = selectedGroups.value.filter(g => g !== groupNumber);
-  } else {
-    selectedGroups.value = [...selectedGroups.value, groupNumber];
-  }
-  loadData();
-};
-
-// Clear group filter
-const clearGroupFilter = () => {
-  selectedGroups.value = [];
-  groupSearchTerm.value = '';
+// Handle supplier group change
+const onGroupChange = () => {
   loadData();
 };
 
@@ -1200,7 +1085,7 @@ onMounted(() => {
     if (event.detail?.itemsPerPage) {
       pageSize.value = event.detail.itemsPerPage;
       if (gridApi.value) {
-        gridApi.value.paginationSetPageSize(pageSize.value);
+        gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
     }
@@ -1213,7 +1098,7 @@ onMounted(() => {
 // Watch page size changes
 watch(pageSize, () => {
   if (gridApi.value) {
-    gridApi.value.paginationSetPageSize(pageSize.value);
+    gridApi.value.setGridOption('paginationPageSize', pageSize.value);
     loadData();
   }
 });

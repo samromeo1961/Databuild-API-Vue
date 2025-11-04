@@ -375,7 +375,7 @@ async function updateContact(event, { code, updates }) {
     const updateRequest = pool.request();
     updateRequest.input('code', code);
 
-    const { name, contact, email, phone, mobile, fax, address, city, state, postcode, group, dear, notes } = updates;
+    const { name, contact, email, phone, mobile, fax, address, city, state, postcode, group, dear, notes, debtor, supplier, osc } = updates;
 
     if (name !== undefined) {
       updateFields.push('Name = @name');
@@ -428,6 +428,18 @@ async function updateContact(event, { code, updates }) {
     if (notes !== undefined) {
       updateFields.push('Notes = @notes');
       updateRequest.input('notes', notes);
+    }
+    if (debtor !== undefined) {
+      updateFields.push('Debtor = @debtor');
+      updateRequest.input('debtor', debtor === true ? 1 : 0);
+    }
+    if (supplier !== undefined) {
+      updateFields.push('Supplier = @supplier');
+      updateRequest.input('supplier', supplier === true ? 1 : 0);
+    }
+    if (osc !== undefined) {
+      updateFields.push('OSC = @osc');
+      updateRequest.input('osc', osc === true ? 1 : 0);
     }
 
     if (updateFields.length === 0) {
