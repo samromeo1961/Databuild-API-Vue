@@ -65,9 +65,19 @@ function createSettingsWindow() {
 function createMainWindow() {
   console.log('🚀 createMainWindow() function called');
 
+  // Check if application should open in expanded/maximized mode
+  let shouldMaximize = false;
+  try {
+    const preferences = getPreferences();
+    shouldMaximize = preferences?.openExpanded || false;
+  } catch (err) {
+    console.error('Error loading openExpanded preference:', err);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: shouldMaximize ? false : true, // Only delay showing if we need to maximize
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -76,15 +86,20 @@ function createMainWindow() {
     icon: path.join(__dirname, 'assets', 'icon.png')
   });
 
-  // Check if application should open in expanded/maximized mode
-  try {
-    const preferences = getPreferences();
-    if (preferences?.openExpanded) {
-      mainWindow.maximize();
-      console.log('✓ Window maximized (openExpanded preference)');
-    }
-  } catch (err) {
-    console.error('Error loading openExpanded preference:', err);
+  // Maximize window immediately if preference is set
+  if (shouldMaximize) {
+    mainWindow.maximize();
+    console.log('✓ Window maximized (openExpanded preference)');
+    console.log('Window isMaximized:', mainWindow.isMaximized());
+    console.log('Window bounds:', mainWindow.getBounds());
+
+    // Show window after maximizing
+    mainWindow.once('ready-to-show', () => {
+      mainWindow.show();
+      console.log('Window shown. isMaximized:', mainWindow.isMaximized());
+      console.log('Window isVisible:', mainWindow.isVisible());
+      console.log('Window bounds after show:', mainWindow.getBounds());
+    });
   }
 
   // Create application menu
@@ -482,16 +497,42 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     // If BrowserView already exists, just restore it instead of recreating
     if (webView) {
       console.log('BrowserView already exists, restoring...');
-      // Add back to window if it was removed
-      if (!mainWindow.getBrowserViews().includes(webView)) {
-        mainWindow.addBrowserView(webView);
+      // Remove from window first to ensure clean re-add
+      if (mainWindow.getBrowserViews().includes(webView)) {
+        mainWindow.removeBrowserView(webView);
       }
-      // Set bounds to make it visible
+
+      // Add back to window
+      mainWindow.addBrowserView(webView);
+
+      // Set bounds to make it visible (must be after addBrowserView)
       webView.setBounds(bounds);
       webView.setAutoResize({ width: true, height: true });
-      // Bring to top to ensure it's visible
+
+      // Check if we need to navigate to a new URL or reload
+      const currentURL = webView.webContents.getURL();
+      if (!currentURL || currentURL === '' || currentURL === 'about:blank') {
+        console.log('BrowserView has no URL, loading:', url);
+        await webView.webContents.loadURL(url);
+      } else if (currentURL !== url) {
+        console.log('BrowserView URL changed, navigating from', currentURL, 'to', url);
+        await webView.webContents.loadURL(url);
+      } else {
+        console.log('BrowserView URL unchanged, reloading:', currentURL);
+        webView.webContents.reload();
+      }
+
+      // Ensure WebContents is visible and focused
+      if (webView.webContents.isOffscreen()) {
+        console.log('WebContents is offscreen, making visible...');
+      }
       webView.webContents.focus();
+
       console.log('BrowserView restored with bounds:', bounds);
+      console.log('BrowserView visible:', !webView.webContents.isOffscreen());
+      console.log('BrowserView actual bounds:', webView.getBounds());
+      console.log('MainWindow bounds:', mainWindow.getBounds());
+      console.log('BrowserViews count:', mainWindow.getBrowserViews().length);
       return { success: true, url: webView.webContents.getURL(), restored: true };
     }
 
