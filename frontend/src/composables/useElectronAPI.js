@@ -138,6 +138,15 @@ export function useElectronAPI() {
       clearAll: () => window.electronAPI?.columnStates.clearAll()
     },
 
+    // Filter States (electron-store persistence)
+    filterState: {
+      get: (tabName) => window.electronAPI?.filterState?.get(tabName),
+      save: (data) => window.electronAPI?.filterState?.save(data),
+      delete: (tabName) => window.electronAPI?.filterState?.delete(tabName),
+      getAll: () => window.electronAPI?.filterState?.getAll(),
+      clearAll: () => window.electronAPI?.filterState?.clearAll()
+    },
+
     // zzType Store (electron-store persistence for item-specific zzType overrides)
     zzTypeStore: {
       get: (priceCode) => window.electronAPI?.zzTypeStore.get(priceCode),

@@ -137,13 +137,13 @@
                 <section class="mb-5">
                   <h4 class="border-bottom pb-2 mb-3">
                     <i class="bi bi-cloud-upload me-2"></i>
-                    zzTakeoff API Integration
+                    zzTakeoff Integration
                   </h4>
-                  <p>Send items to zzTakeoff external API.</p>
+                  <p>Send items directly to zzTakeoff.com via the zzTakeoff Web browser.</p>
                   <ul>
                     <li><strong>Send to zzTakeoff:</strong> From Catalogue or Recipes, select items and use the "Send to zzTakeoff" button</li>
-                    <li><strong>History:</strong> View send history in the zzTakeoff API tab</li>
-                    <li><strong>API Configuration:</strong> Configure your zzTakeoff API endpoint in Preferences</li>
+                    <li><strong>Automatic Navigation:</strong> Clicking send automatically opens zzTakeoff Web and starts a new takeoff with your item</li>
+                    <li><strong>Item Properties:</strong> Product ID, description, unit, price, and cost centre are automatically populated</li>
                   </ul>
                 </section>
 
@@ -322,10 +322,6 @@
                         </tr>
                         <tr>
                           <td><kbd>Ctrl</kbd> + <kbd>8</kbd></td>
-                          <td>zzTakeoff API</td>
-                        </tr>
-                        <tr>
-                          <td><kbd>Ctrl</kbd> + <kbd>9</kbd></td>
                           <td>zzTakeoff Web</td>
                         </tr>
                       </tbody>

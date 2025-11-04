@@ -128,6 +128,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearAll: () => ipcRenderer.invoke('column-states:clear-all')
   },
 
+  // Filter States (electron-store persistent storage)
+  filterState: {
+    get: (tabName) => ipcRenderer.invoke('filter-state:get', tabName),
+    save: (data) => ipcRenderer.invoke('filter-state:save', data),
+    delete: (tabName) => ipcRenderer.invoke('filter-state:delete', tabName),
+    getAll: () => ipcRenderer.invoke('filter-state:get-all'),
+    clearAll: () => ipcRenderer.invoke('filter-state:clear-all')
+  },
+
   // zzType Store (electron-store persistent storage for item-specific zzType overrides)
   zzTypeStore: {
     get: (priceCode) => ipcRenderer.invoke('zztype:get', priceCode),

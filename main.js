@@ -20,6 +20,7 @@ const favouritesStoreHandlers = require('./src/ipc-handlers/favourites-store');
 const recentsStoreHandlers = require('./src/ipc-handlers/recents-store');
 const columnStatesHandlers = require('./src/ipc-handlers/column-states');
 const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
+const filterStateHandlers = require('./src/ipc-handlers/filter-state');
 const credentialsStore = require('./src/database/credentials-store');
 
 // Initialize electron-store for secure settings storage
@@ -191,17 +192,8 @@ function createMainWindow() {
         },
         { type: 'separator' },
         {
-          label: 'zzTakeoff API',
-          accelerator: 'Ctrl+8',
-          click: () => {
-            if (mainWindow) {
-              mainWindow.webContents.send('navigate-to', '/zztakeoff');
-            }
-          }
-        },
-        {
           label: 'zzTakeoff Web',
-          accelerator: 'Ctrl+9',
+          accelerator: 'Ctrl+8',
           click: () => {
             if (mainWindow) {
               mainWindow.webContents.send('navigate-to', '/zztakeoff-web');
@@ -416,6 +408,16 @@ ipcMain.handle('column-states:save', columnStatesHandlers.handleSaveColumnState)
 ipcMain.handle('column-states:delete', columnStatesHandlers.handleDeleteColumnState);
 ipcMain.handle('column-states:get-all', columnStatesHandlers.handleGetAllColumnStates);
 ipcMain.handle('column-states:clear-all', columnStatesHandlers.handleClearAllColumnStates);
+
+// ============================================================
+// IPC Handlers for Filter States (Persistent)
+// ============================================================
+
+ipcMain.handle('filter-state:get', filterStateHandlers.handleGetFilterState);
+ipcMain.handle('filter-state:save', filterStateHandlers.handleSaveFilterState);
+ipcMain.handle('filter-state:delete', filterStateHandlers.handleDeleteFilterState);
+ipcMain.handle('filter-state:get-all', filterStateHandlers.handleGetAllFilterStates);
+ipcMain.handle('filter-state:clear-all', filterStateHandlers.handleClearAllFilterStates);
 
 // ============================================================
 // IPC Handlers for Templates Store (Persistent)

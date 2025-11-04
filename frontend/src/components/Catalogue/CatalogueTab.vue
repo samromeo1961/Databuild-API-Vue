@@ -427,6 +427,7 @@ const totalSize = ref(0);
 const filteredCount = ref(0);
 const selectedRows = ref([]);
 const gridApi = ref(null);
+const isFilterStateLoaded = ref(false);
 const pageSize = ref(50);
 const pageSizeOptions = [25, 50, 100, 200];
 const currentPage = ref(0);
@@ -937,7 +938,11 @@ const onGridReady = (params) => {
   params.api.addEventListener('columnVisible', saveColumnState);
   params.api.addEventListener('columnPinned', saveColumnState);
 
-  loadData();
+  // Only load data if filter state has already been loaded
+  // Otherwise, loadFilterState() will call loadData() when it completes
+  if (isFilterStateLoaded.value) {
+    loadData();
+  }
 };
 
 // Selection changed handler
@@ -1808,11 +1813,81 @@ const loadPageSize = async () => {
   }
 };
 
+// Filter persistence functions
+const saveFilterState = async () => {
+  try {
+    // Serialize to plain JSON to avoid IPC cloning issues
+    const filterState = JSON.parse(JSON.stringify({
+      searchTerm: searchTerm.value,
+      selectedCostCentres: selectedCostCentres.value,
+      dateFrom: dateFrom.value,
+      dateTo: dateTo.value,
+      showArchived: showArchived.value
+    }));
+
+    await api.filterState.save({
+      tabName: 'catalogue',
+      filterState: filterState
+    });
+
+    console.log('✓ Catalogue filter state saved:', filterState);
+  } catch (err) {
+    console.error('Error saving catalogue filter state:', err);
+  }
+};
+
+const loadFilterState = async () => {
+  try {
+    const result = await api.filterState.get('catalogue');
+
+    if (result?.success && result?.data) {
+      const filterState = result.data;
+      console.log('✓ Loading catalogue filter state:', filterState);
+
+      // Restore filter values
+      if (filterState.searchTerm !== undefined) {
+        searchTerm.value = filterState.searchTerm;
+      }
+      if (filterState.selectedCostCentres !== undefined) {
+        selectedCostCentres.value = filterState.selectedCostCentres;
+      }
+      if (filterState.dateFrom !== undefined) {
+        dateFrom.value = filterState.dateFrom;
+      }
+      if (filterState.dateTo !== undefined) {
+        dateTo.value = filterState.dateTo;
+      }
+      if (filterState.showArchived !== undefined) {
+        showArchived.value = filterState.showArchived;
+      }
+
+      // Mark as loaded
+      isFilterStateLoaded.value = true;
+
+      // Reload data with restored filters if grid is ready
+      if (gridApi.value) {
+        console.log('✓ Reloading data with restored filters');
+        await loadData(true);
+      }
+    } else {
+      // No saved filter state, mark as loaded anyway
+      isFilterStateLoaded.value = true;
+    }
+  } catch (err) {
+    console.error('Error loading catalogue filter state:', err);
+    // Mark as loaded even on error to prevent blocking
+    isFilterStateLoaded.value = true;
+  }
+};
+
 // Listen for preferences updates
-onMounted(() => {
+onMounted(async () => {
   loadPageSize();
   loadCostCentres();
   loadTemplates();
+
+  // Load saved filter state
+  await loadFilterState();
 
   // Initialize modal
   if (addToTemplateModal.value) {
@@ -1838,6 +1913,11 @@ watch(pageSize, () => {
     // No need to reload data - AG Grid handles pagination client-side
   }
 });
+
+// Watch filter changes and save state
+watch([searchTerm, selectedCostCentres, dateFrom, dateTo, showArchived], () => {
+  saveFilterState();
+}, { deep: true });
 </script>
 
 <style scoped>

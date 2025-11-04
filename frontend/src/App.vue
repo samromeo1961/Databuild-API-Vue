@@ -109,16 +109,6 @@
         </li>
         <li class="nav-item" role="presentation">
           <router-link
-            to="/zztakeoff"
-            class="nav-link"
-            active-class="active"
-            role="tab"
-          >
-            zzTakeoff API
-          </router-link>
-        </li>
-        <li class="nav-item" role="presentation">
-          <router-link
             to="/zztakeoff-web"
             class="nav-link"
             active-class="active"
@@ -234,8 +224,8 @@ const currentRoute = computed(() => router.currentRoute.value.path);
 // Dropdown state
 const showNavDropdown = ref(false);
 
-// Track the last visited tab (for going back from other tabs to zzTakeoff Web, etc.)
-const lastVisitedTab = ref('/zztakeoff-web'); // Default to zzTakeoff Web
+// Track the last visited tab (for going back from other tabs, etc.)
+const lastVisitedTab = ref('/catalogue'); // Default to Catalogue
 
 // All tabs for navigation dropdown
 const allTabs = [
@@ -246,7 +236,6 @@ const allTabs = [
   { path: '/templates', label: 'Templates', icon: 'bi bi-file-earmark-text' },
   { path: '/favourites', label: 'Favourites', icon: 'bi bi-star' },
   { path: '/recents', label: 'Recents', icon: 'bi bi-clock-history' },
-  { path: '/zztakeoff', label: 'zzTakeoff API', icon: 'bi bi-cloud-arrow-up' },
   { path: '/zztakeoff-web', label: 'zzTakeoff Web', icon: 'bi bi-browser-chrome' }
 ];
 

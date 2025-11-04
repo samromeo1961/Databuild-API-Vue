@@ -12,7 +12,7 @@
             <input
               type="text"
               class="form-control"
-              placeholder="Search items in template..."
+              placeholder="Search by code, description, unit, cost centre, price, or zzType..."
               v-model="searchTerm"
               @input="onSearchChange"
               :disabled="!selectedTemplate"
@@ -65,6 +65,14 @@
             </span>
           </button>
           <button
+            class="btn btn-outline-primary"
+            @click="handleAddFromCatalogue"
+            :disabled="!selectedTemplate"
+            title="Add Items from Catalogue"
+          >
+            <i class="bi bi-plus-square"></i>
+          </button>
+          <button
             class="btn btn-outline-secondary"
             @click="openColumnPanel"
             :disabled="!selectedTemplate"
@@ -89,11 +97,12 @@
           </button>
           <button
             class="btn btn-outline-danger"
-            @click="handleDeleteTemplate"
+            @click="handleDelete"
             :disabled="!selectedTemplate"
-            title="Delete Template"
+            :title="selectedRows.length > 0 ? `Delete ${selectedRows.length} Selected Item(s)` : 'Delete Template'"
           >
             <i class="bi bi-trash"></i>
+            <span v-if="selectedRows.length > 0" class="ms-1">({{ selectedRows.length }})</span>
           </button>
         </div>
       </div>
@@ -139,13 +148,19 @@
           :loading="loading"
           @grid-ready="onGridReady"
           @selection-changed="onSelectionChanged"
+          @cell-value-changed="onCellValueChanged"
         />
 
         <!-- Custom footer info overlaid on AG Grid pagination -->
         <div class="custom-grid-footer">
           <span class="text-muted small">
             <i class="bi bi-folder me-1"></i>
-            Total: <strong>{{ filteredData.length.toLocaleString() }}</strong> items
+            <template v-if="searchTerm && filteredData.length < (selectedTemplate?.items?.length || 0)">
+              Showing: <strong>{{ filteredData.length.toLocaleString() }}</strong> of <strong>{{ (selectedTemplate?.items?.length || 0).toLocaleString() }}</strong> items
+            </template>
+            <template v-else>
+              Total: <strong>{{ filteredData.length.toLocaleString() }}</strong> items
+            </template>
           </span>
           <span v-if="selectedRows.length > 0" class="text-primary small ms-3">
             <i class="bi bi-check2-square me-1"></i>
@@ -301,7 +316,7 @@
       </div>
     </div>
 
-    <!-- Delete Template Confirmation Modal -->
+    <!-- Delete Confirmation Modal -->
     <div
       class="modal fade"
       id="deleteTemplateModal"
@@ -313,16 +328,364 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="deleteTemplateModalLabel">Confirm Delete Template</h5>
+            <h5 class="modal-title" id="deleteTemplateModalLabel">
+              {{ selectedRows.length > 0 ? 'Confirm Delete Items' : 'Confirm Delete Template' }}
+            </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            Are you sure you want to delete the template "{{ selectedTemplate?.templateName }}"?
-            This action cannot be undone.
+            <template v-if="selectedRows.length > 0">
+              Are you sure you want to delete {{ selectedRows.length }} selected item(s) from the template "{{ selectedTemplate?.templateName }}"?
+              <div class="mt-3">
+                <strong>Items to be deleted:</strong>
+                <ul class="mt-2">
+                  <li v-for="item in selectedRows.slice(0, 5)" :key="item.PriceCode">
+                    {{ item.PriceCode }} - {{ item.description || item.Description }}
+                  </li>
+                  <li v-if="selectedRows.length > 5">
+                    ... and {{ selectedRows.length - 5 }} more
+                  </li>
+                </ul>
+              </div>
+            </template>
+            <template v-else>
+              Are you sure you want to delete the template "{{ selectedTemplate?.templateName }}"?
+              This action cannot be undone.
+            </template>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-danger" @click="confirmDeleteTemplate">Delete</button>
+            <button type="button" class="btn btn-danger" @click="confirmDelete">
+              Delete {{ selectedRows.length > 0 ? `${selectedRows.length} Item(s)` : 'Template' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add from Catalogue Modal -->
+    <div
+      class="modal fade"
+      id="addFromCatalogueModal"
+      tabindex="-1"
+      aria-labelledby="addFromCatalogueModalLabel"
+      aria-hidden="true"
+      ref="addFromCatalogueModal"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addFromCatalogueModalLabel">Add Items from Catalogue</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Search and Filter Controls -->
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <label class="form-label">Cost Centre</label>
+                <select
+                  class="form-select"
+                  v-model="catalogueCostCentre"
+                  @change="onCatalogueCostCentreChange"
+                >
+                  <option value="">All Cost Centres</option>
+                  <option v-for="cc in catalogueCostCentres" :key="cc.Code" :value="cc.Code">
+                    {{ cc.Code }} - {{ cc.Name }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Search</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                  </span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Search by code or description..."
+                    v-model="catalogueSearchTerm"
+                    @input="onCatalogueSearchChange"
+                  />
+                  <button
+                    v-if="catalogueSearchTerm"
+                    class="btn btn-outline-secondary"
+                    @click="clearCatalogueSearch"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button
+                  class="btn btn-primary w-100 d-block"
+                  @click="loadCatalogueItems"
+                  :disabled="loadingCatalogue"
+                >
+                  <span v-if="loadingCatalogue">
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    Loading...
+                  </span>
+                  <span v-else>
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Refresh
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Catalogue Items Grid -->
+            <div v-if="catalogueItems.length > 0" style="height: 400px;">
+              <ag-grid-vue
+                class="ag-theme-quartz h-100"
+                :class="{ 'ag-theme-quartz-dark': isDarkMode }"
+                theme="legacy"
+                :columnDefs="catalogueColumnDefs"
+                :rowData="catalogueItems"
+                :defaultColDef="catalogueDefaultColDef"
+                :pagination="true"
+                :paginationPageSize="50"
+                :rowSelection="catalogueRowSelectionConfig"
+                @grid-ready="onCatalogueGridReady"
+                @selection-changed="onCatalogueSelectionChanged"
+              />
+            </div>
+            <div v-else-if="!loadingCatalogue" class="text-center py-4 text-muted">
+              <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+              <p class="mt-2">No items found. Try adjusting your search or filters.</p>
+            </div>
+
+            <!-- Selected Items Info -->
+            <div v-if="catalogueSelectedRows.length > 0" class="mt-3 alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              {{ catalogueSelectedRows.length }} item(s) selected
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="confirmAddFromCatalogue"
+              :disabled="catalogueSelectedRows.length === 0"
+            >
+              <i class="bi bi-plus-circle me-1"></i>
+              Add {{ catalogueSelectedRows.length }} Item(s) to Template
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template Editor Modal -->
+    <div
+      class="modal fade"
+      id="templateEditorModal"
+      tabindex="-1"
+      aria-labelledby="templateEditorModalLabel"
+      aria-hidden="true"
+      ref="templateEditorModal"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="templateEditorModalLabel">Template Editor</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Mode Selection -->
+            <div class="row mb-3">
+              <div class="col-12">
+                <div class="btn-group w-100" role="group">
+                  <input
+                    type="radio"
+                    class="btn-check"
+                    id="editorModeNew"
+                    value="new"
+                    v-model="templateEditorMode"
+                  />
+                  <label class="btn btn-outline-primary" for="editorModeNew">
+                    <i class="bi bi-plus-circle me-1"></i>Create New Template
+                  </label>
+
+                  <input
+                    type="radio"
+                    class="btn-check"
+                    id="editorModeAdd"
+                    value="add"
+                    v-model="templateEditorMode"
+                    :disabled="!selectedTemplate"
+                  />
+                  <label class="btn btn-outline-primary" for="editorModeAdd" :class="{ disabled: !selectedTemplate }">
+                    <i class="bi bi-folder-plus me-1"></i>Add to Selected Template
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Template Details (Only for New Template Mode) -->
+            <div v-if="templateEditorMode === 'new'" class="row mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Template Name <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="Enter template name..."
+                  v-model="newTemplateData.name"
+                />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Description (Optional)</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="Enter template description..."
+                  v-model="newTemplateData.description"
+                />
+              </div>
+            </div>
+
+            <!-- Current Template Info (Only for Add Mode) -->
+            <div v-if="templateEditorMode === 'add' && selectedTemplate" class="alert alert-info mb-3">
+              <i class="bi bi-info-circle me-2"></i>
+              Adding items to: <strong>{{ selectedTemplate.templateName }}</strong>
+              ({{ selectedTemplate.items?.length || 0 }} existing items)
+            </div>
+
+            <hr />
+
+            <!-- Catalogue Search Section -->
+            <h6 class="mb-3">Add Items from Catalogue</h6>
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <label class="form-label">Cost Centre</label>
+                <select
+                  class="form-select"
+                  v-model="editorCatalogueCostCentre"
+                  @change="onEditorCatalogueCostCentreChange"
+                >
+                  <option value="">All Cost Centres</option>
+                  <option v-for="cc in editorCatalogueCostCentres" :key="cc.Code" :value="cc.Code">
+                    {{ cc.Code }} - {{ cc.Name }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Search</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                  </span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Search by code or description..."
+                    v-model="editorCatalogueSearchTerm"
+                    @input="onEditorCatalogueSearchChange"
+                  />
+                  <button
+                    v-if="editorCatalogueSearchTerm"
+                    class="btn btn-outline-secondary"
+                    @click="clearEditorCatalogueSearch"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button
+                  class="btn btn-primary w-100 d-block"
+                  @click="loadEditorCatalogueItems"
+                  :disabled="loadingEditorCatalogue"
+                >
+                  <span v-if="loadingEditorCatalogue">
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    Loading...
+                  </span>
+                  <span v-else>
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Search
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Catalogue Items Grid -->
+            <div v-if="editorCatalogueItems.length > 0" style="height: 300px;">
+              <ag-grid-vue
+                class="ag-theme-quartz h-100"
+                :class="{ 'ag-theme-quartz-dark': isDarkMode }"
+                theme="legacy"
+                :columnDefs="catalogueColumnDefs"
+                :rowData="editorCatalogueItems"
+                :defaultColDef="catalogueDefaultColDef"
+                :pagination="true"
+                :paginationPageSize="50"
+                :rowSelection="catalogueRowSelectionConfig"
+                @grid-ready="onEditorCatalogueGridReady"
+                @selection-changed="onEditorCatalogueSelectionChanged"
+              />
+            </div>
+            <div v-else-if="!loadingEditorCatalogue" class="text-center py-3 text-muted">
+              <i class="bi bi-search" style="font-size: 2rem;"></i>
+              <p class="mt-2">Search catalogue to add items to template</p>
+            </div>
+
+            <!-- Selected Items Section -->
+            <div v-if="newTemplateData.items.length > 0" class="mt-3">
+              <hr />
+              <h6>Selected Items ({{ newTemplateData.items.length }})</h6>
+              <div class="mt-2" style="max-height: 150px; overflow-y: auto;">
+                <div v-for="item in newTemplateData.items" :key="item.PriceCode" class="d-flex align-items-center justify-content-between border-bottom py-2">
+                  <div>
+                    <strong>{{ item.PriceCode }}</strong> - {{ item.description }}
+                    <span class="text-muted ms-2">{{ item.Unit }}</span>
+                  </div>
+                  <button
+                    class="btn btn-sm btn-outline-danger"
+                    @click="removeItemFromNewTemplate(item.PriceCode)"
+                    title="Remove item"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="editorCatalogueSelectedRows.length > 0" class="mt-3">
+              <button
+                class="btn btn-success"
+                @click="addItemsToNewTemplate"
+              >
+                <i class="bi bi-plus-circle me-1"></i>
+                Add {{ editorCatalogueSelectedRows.length }} Item(s) to Template
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button
+              v-if="templateEditorMode === 'new'"
+              type="button"
+              class="btn btn-primary"
+              @click="confirmCreateTemplate"
+              :disabled="!newTemplateData.name || newTemplateData.items.length === 0"
+            >
+              <i class="bi bi-check-circle me-1"></i>
+              Create Template ({{ newTemplateData.items.length }} items)
+            </button>
+            <button
+              v-if="templateEditorMode === 'add'"
+              type="button"
+              class="btn btn-primary"
+              @click="confirmAddToTemplate"
+              :disabled="newTemplateData.items.length === 0"
+            >
+              <i class="bi bi-plus-circle me-1"></i>
+              Add {{ newTemplateData.items.length }} Item(s) to Template
+            </button>
           </div>
         </div>
       </div>
@@ -334,10 +697,12 @@
 import { ref, computed, onMounted, inject } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { useRouter } from 'vue-router';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
+const router = useRouter();
 const theme = inject('theme');
 
 // State
@@ -365,23 +730,82 @@ const managedColumns = ref([]);
 const renameColumnField = ref('');
 const renameColumnName = ref('');
 
+// Add from Catalogue Modal
+const addFromCatalogueModal = ref(null);
+let addFromCatalogueModalInstance = null;
+const catalogueSearchTerm = ref('');
+const catalogueCostCentre = ref('');
+const catalogueCostCentres = ref([]);
+const catalogueItems = ref([]);
+const catalogueSelectedRows = ref([]);
+const catalogueGridApi = ref(null);
+const loadingCatalogue = ref(false);
+let catalogueSearchDebounce = null;
+
+// Template Editor Modal
+const templateEditorModal = ref(null);
+let templateEditorModalInstance = null;
+const templateEditorMode = ref('new'); // 'new' or 'add'
+const newTemplateData = ref({
+  name: '',
+  description: '',
+  items: []
+});
+const editorCatalogueSearchTerm = ref('');
+const editorCatalogueCostCentre = ref('');
+const editorCatalogueCostCentres = ref([]);
+const editorCatalogueItems = ref([]);
+const editorCatalogueSelectedRows = ref([]);
+const editorCatalogueGridApi = ref(null);
+const loadingEditorCatalogue = ref(false);
+let editorCatalogueSearchDebounce = null;
+
 // Check if dark mode
 const isDarkMode = computed(() => {
   return theme && theme.value === 'dark';
 });
 
-// Filtered data based on search
+// Filtered data based on search (advanced multi-word search)
 const filteredData = computed(() => {
   if (!selectedTemplate.value || !selectedTemplate.value.items) return [];
 
   if (!searchTerm.value) return selectedTemplate.value.items;
 
-  const search = searchTerm.value.toLowerCase();
-  return selectedTemplate.value.items.filter(item =>
-    item.PriceCode?.toLowerCase().includes(search) ||
-    item.description?.toLowerCase().includes(search) ||
-    item.Description?.toLowerCase().includes(search)
-  );
+  // Split search term into words and filter out empty strings
+  const searchWords = searchTerm.value.trim().split(/\s+/).filter(word => word.length > 0);
+
+  if (searchWords.length === 0) return selectedTemplate.value.items;
+
+  return selectedTemplate.value.items.filter(item => {
+    // Normalize item fields for searching
+    const priceCode = (item.PriceCode || '').toLowerCase();
+    const description = (item.description || item.Description || '').toLowerCase();
+    const unit = (item.Unit || '').toLowerCase();
+    const costCentre = (item.CostCentre || '').toLowerCase();
+    const price = (item.Price || '').toString().toLowerCase();
+    const zzType = (item.zzType || '').toLowerCase();
+
+    if (searchWords.length === 1) {
+      // Single word: search in any field
+      const word = searchWords[0].toLowerCase();
+      return priceCode.includes(word) ||
+             description.includes(word) ||
+             unit.includes(word) ||
+             costCentre.includes(word) ||
+             price.includes(word) ||
+             zzType.includes(word);
+    } else {
+      // Multiple words: ALL words must be in description OR ALL words must be in priceCode
+      const allWordsInDescription = searchWords.every(word =>
+        description.includes(word.toLowerCase())
+      );
+      const allWordsInPriceCode = searchWords.every(word =>
+        priceCode.includes(word.toLowerCase())
+      );
+
+      return allWordsInDescription || allWordsInPriceCode;
+    }
+  });
 });
 
 // Row selection configuration (new v32+ API)
@@ -450,6 +874,42 @@ const columnDefs = ref([
     width: 130,
     filter: 'agTextColumnFilter',
     sortable: true
+  },
+  {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 100,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['area', 'linear', 'segment', 'count']
+    },
+    editable: true,
+    tooltipValueGetter: (params) => params.value
+  },
+  {
+    field: 'actions',
+    headerName: 'Actions',
+    width: 170,
+    minWidth: 170,
+    pinned: 'right',
+    cellRenderer: (params) => {
+      return `
+        <div class="action-buttons d-flex gap-1 justify-content-center">
+          <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
+            <i class="bi bi-send"></i>
+          </button>
+          <button class="btn btn-sm btn-danger" data-action="delete" title="Delete Item">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      `;
+    },
+    suppressHeaderMenuButton: true,
+    sortable: false,
+    filter: false,
+    resizable: true
   }
 ]);
 
@@ -459,6 +919,68 @@ const defaultColDef = {
   sortable: false,
   filter: false,
   floatingFilter: false
+};
+
+// Catalogue Modal - Column definitions
+const catalogueColumnDefs = ref([
+  {
+    field: 'ItemCode',
+    headerName: 'Code',
+    width: 120,
+    pinned: 'left',
+    sortable: true
+  },
+  {
+    field: 'Description',
+    headerName: 'Description',
+    flex: 1,
+    minWidth: 300,
+    sortable: true
+  },
+  {
+    field: 'Unit',
+    headerName: 'Unit',
+    width: 80,
+    sortable: true
+  },
+  {
+    field: 'LatestPrice',
+    headerName: 'Price',
+    width: 120,
+    sortable: true,
+    valueFormatter: (params) => {
+      if (params.value == null) return '-';
+      return `$${params.value.toFixed(2)}`;
+    },
+    cellStyle: { textAlign: 'right' }
+  },
+  {
+    field: 'CostCentre',
+    headerName: 'Cost Centre',
+    width: 130,
+    sortable: true
+  },
+  {
+    field: 'CostCentreName',
+    headerName: 'Cost Centre Name',
+    width: 200,
+    sortable: true
+  }
+]);
+
+// Catalogue Modal - Default column properties
+const catalogueDefaultColDef = {
+  resizable: true,
+  sortable: false,
+  filter: false
+};
+
+// Catalogue Modal - Row selection configuration
+const catalogueRowSelectionConfig = {
+  mode: 'multiRow',
+  checkboxes: true,
+  headerCheckbox: true,
+  enableClickSelection: false
 };
 
 // Debounce timer
@@ -479,6 +1001,16 @@ const loadTemplates = async () => {
         const updatedTemplate = templates.value.find(t => t.id === selectedTemplateId.value);
         if (updatedTemplate) {
           selectedTemplate.value = updatedTemplate;
+
+          // Resolve zzType for all items in the refreshed template
+          if (selectedTemplate.value && selectedTemplate.value.items) {
+            await resolveZzTypesForItems(selectedTemplate.value.items);
+
+            // Force grid refresh if grid is ready
+            if (gridApi.value) {
+              gridApi.value.refreshCells({ force: true });
+            }
+          }
         } else {
           // Template was deleted
           selectedTemplateId.value = '';
@@ -496,10 +1028,58 @@ const loadTemplates = async () => {
   }
 };
 
+// Resolve zzType for template items
+const resolveZzTypesForItems = async (items) => {
+  try {
+    // Load preferences for unit mappings and zzType overrides
+    const [prefsResult, zzTypesResult] = await Promise.all([
+      api.preferencesStore.get(),
+      api.zzTypeStore.getAll()
+    ]);
+
+    const unitMappings = prefsResult?.success ? prefsResult.data.unitTakeoffMappings : {};
+    const zzTypeOverrides = zzTypesResult?.success ? zzTypesResult.types : {};
+
+    console.log('[zzType] Unit mappings:', unitMappings);
+    console.log('[zzType] Overrides:', zzTypeOverrides);
+
+    // Resolve zzType for each item
+    items.forEach(item => {
+      // Resolution priority: 1. Override, 2. Unit mapping, 3. Default to 'count'
+      if (zzTypeOverrides[item.PriceCode]) {
+        item.zzType = zzTypeOverrides[item.PriceCode];
+        console.log(`[zzType] ${item.PriceCode}: Using override → ${item.zzType}`);
+      } else if (item.Unit && unitMappings[item.Unit]) {
+        item.zzType = unitMappings[item.Unit];
+        console.log(`[zzType] ${item.PriceCode}: Using unit mapping ${item.Unit} → ${item.zzType}`);
+      } else {
+        item.zzType = 'count'; // Default
+      }
+    });
+  } catch (err) {
+    console.error('[zzType] Error resolving zzTypes:', err);
+    // Set default for all items on error
+    items.forEach(item => {
+      item.zzType = 'count';
+    });
+  }
+};
+
 // Template change handler
-const onTemplateChange = () => {
+const onTemplateChange = async () => {
   if (selectedTemplateId.value) {
     selectedTemplate.value = templates.value.find(t => t.id === selectedTemplateId.value);
+
+    // Resolve zzType for all items in the template
+    if (selectedTemplate.value && selectedTemplate.value.items) {
+      await resolveZzTypesForItems(selectedTemplate.value.items);
+
+      // Force grid refresh by triggering reactivity
+      if (gridApi.value) {
+        gridApi.value.refreshCells({ force: true });
+      }
+    }
+
     // Save last selected template for persistence
     saveLastTemplate(selectedTemplateId.value);
   } else {
@@ -514,7 +1094,7 @@ const onSearchChange = () => {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => {
     // Filtering happens automatically via computed property
-  }, 300);
+  }, 500);
 };
 
 // Clear search
@@ -525,6 +1105,20 @@ const clearSearch = () => {
 // Grid ready handler
 const onGridReady = (params) => {
   gridApi.value = params.api;
+
+  // Add click event listener for row actions
+  params.api.addEventListener('cellClicked', (event) => {
+    // Check both the target and its parent for data-action
+    const target = event.event.target;
+    const action = target.dataset.action || target.closest('[data-action]')?.dataset.action;
+
+    if (action === 'zztakeoff') {
+      handleSendSingleItemToZzTakeoff(event.data);
+    } else if (action === 'delete') {
+      handleDeleteItem(event.data);
+    }
+  });
+
   loadColumnState();
 };
 
@@ -535,9 +1129,337 @@ const onSelectionChanged = () => {
   }
 };
 
+// Cell value changed handler (for inline editing)
+const onCellValueChanged = async (event) => {
+  const field = event.colDef.field;
+  const data = event.data;
+  const newValue = event.newValue;
+  const oldValue = event.oldValue;
+
+  // Only handle zzType changes
+  if (field === 'zzType') {
+    try {
+      // Save zzType override to electron-store
+      const result = await api.zzTypeStore.set(data.PriceCode, newValue.toLowerCase());
+      console.log('[zzType] Saved override:', data.PriceCode, '→', newValue.toLowerCase());
+
+      if (result && result.success) {
+        success.value = 'zzType updated successfully';
+        setTimeout(() => success.value = null, 3000);
+      } else {
+        error.value = 'Failed to update zzType';
+        // Revert the change in the grid
+        event.node.setDataValue(field, oldValue);
+      }
+    } catch (err) {
+      console.error('Error updating zzType:', err);
+      error.value = 'Failed to update zzType';
+      // Revert the change in the grid
+      event.node.setDataValue(field, oldValue);
+    }
+  }
+};
+
 // Handle new template
-const handleNewTemplate = () => {
-  alert('New template editor - functionality coming soon!');
+const handleNewTemplate = async () => {
+  // Set mode based on whether a template is selected
+  templateEditorMode.value = selectedTemplate.value ? 'add' : 'new';
+
+  // Reset template data
+  newTemplateData.value = {
+    name: '',
+    description: '',
+    items: []
+  };
+  editorCatalogueSearchTerm.value = '';
+  editorCatalogueCostCentre.value = '';
+  editorCatalogueItems.value = [];
+  editorCatalogueSelectedRows.value = [];
+
+  // Open modal
+  if (templateEditorModalInstance) {
+    templateEditorModalInstance.show();
+  }
+
+  // Load cost centres
+  await loadEditorCatalogueCostCentres();
+};
+
+// ===== Template Editor Modal Functions =====
+
+// Load editor catalogue cost centres
+const loadEditorCatalogueCostCentres = async () => {
+  try {
+    const response = await api.costCentres.getList({});
+    if (response?.success) {
+      editorCatalogueCostCentres.value = response.data || [];
+      console.log(`Loaded ${editorCatalogueCostCentres.value.length} cost centres for editor`);
+    }
+  } catch (err) {
+    console.error('Error loading editor cost centres:', err);
+  }
+};
+
+// Load editor catalogue items
+const loadEditorCatalogueItems = async () => {
+  loadingEditorCatalogue.value = true;
+
+  try {
+    const params = {
+      limit: 999999,
+      offset: 0,
+      showArchived: false
+    };
+
+    if (editorCatalogueSearchTerm.value) {
+      params.searchTerm = editorCatalogueSearchTerm.value;
+    }
+
+    if (editorCatalogueCostCentre.value) {
+      params.costCentre = editorCatalogueCostCentre.value;
+    }
+
+    const response = await api.catalogue.getItems(params);
+
+    if (response?.success) {
+      editorCatalogueItems.value = response.data || [];
+    } else {
+      error.value = 'Failed to load catalogue items';
+      editorCatalogueItems.value = [];
+    }
+  } catch (err) {
+    console.error('Error loading editor catalogue items:', err);
+    error.value = 'Error loading catalogue items';
+    editorCatalogueItems.value = [];
+  } finally {
+    loadingEditorCatalogue.value = false;
+  }
+};
+
+// Editor catalogue search change handler with debounce
+const onEditorCatalogueSearchChange = () => {
+  clearTimeout(editorCatalogueSearchDebounce);
+  editorCatalogueSearchDebounce = setTimeout(() => {
+    loadEditorCatalogueItems();
+  }, 500);
+};
+
+// Clear editor catalogue search
+const clearEditorCatalogueSearch = () => {
+  editorCatalogueSearchTerm.value = '';
+  loadEditorCatalogueItems();
+};
+
+// Editor catalogue cost centre change handler
+const onEditorCatalogueCostCentreChange = () => {
+  loadEditorCatalogueItems();
+};
+
+// Editor catalogue grid ready handler
+const onEditorCatalogueGridReady = (params) => {
+  editorCatalogueGridApi.value = params.api;
+};
+
+// Editor catalogue selection changed handler
+const onEditorCatalogueSelectionChanged = () => {
+  if (editorCatalogueGridApi.value) {
+    editorCatalogueSelectedRows.value = editorCatalogueGridApi.value.getSelectedRows();
+  }
+};
+
+// Add items from catalogue grid to new template items array
+const addItemsToNewTemplate = () => {
+  if (editorCatalogueSelectedRows.value.length === 0) return;
+
+  // Map selected rows to template items format
+  const itemsToAdd = editorCatalogueSelectedRows.value.map(row => ({
+    PriceCode: String(row.ItemCode),
+    description: String(row.Description),
+    Unit: String(row.Unit || ''),
+    Price: Number(row.LatestPrice || 0),
+    CostCentre: String(row.CostCentre || ''),
+    quantity: 1
+  }));
+
+  // Add to items array (avoiding duplicates)
+  const existingCodes = newTemplateData.value.items.map(item => item.PriceCode);
+  const newItems = itemsToAdd.filter(item => !existingCodes.includes(item.PriceCode));
+
+  if (newItems.length > 0) {
+    newTemplateData.value.items = [...newTemplateData.value.items, ...newItems];
+    success.value = `Added ${newItems.length} item(s) to selection`;
+    setTimeout(() => success.value = null, 3000);
+  } else {
+    error.value = 'All selected items are already in the template';
+    setTimeout(() => error.value = null, 3000);
+  }
+
+  // Clear grid selections
+  if (editorCatalogueGridApi.value) {
+    editorCatalogueGridApi.value.deselectAll();
+  }
+  editorCatalogueSelectedRows.value = [];
+};
+
+// Remove item from new template items array
+const removeItemFromNewTemplate = (priceCode) => {
+  newTemplateData.value.items = newTemplateData.value.items.filter(item => item.PriceCode !== priceCode);
+};
+
+// Confirm create new template
+const confirmCreateTemplate = async () => {
+  if (!newTemplateData.value.name || newTemplateData.value.items.length === 0) {
+    error.value = 'Template name and at least one item are required';
+    return;
+  }
+
+  try {
+    // Create new template
+    const templateToSave = {
+      id: String(Date.now()), // Generate unique ID
+      templateName: String(newTemplateData.value.name),
+      description: String(newTemplateData.value.description || ''),
+      items: newTemplateData.value.items.map(item => ({
+        PriceCode: String(item.PriceCode),
+        description: String(item.description),
+        Unit: String(item.Unit || ''),
+        Price: Number(item.Price || 0),
+        CostCentre: String(item.CostCentre || ''),
+        quantity: Number(item.quantity || 1)
+      })),
+      dateCreated: new Date().toISOString(),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    success.value = `Template "${newTemplateData.value.name}" created successfully with ${newTemplateData.value.items.length} item(s)`;
+    setTimeout(() => success.value = null, 3000);
+
+    // Hide modal
+    if (templateEditorModalInstance) {
+      templateEditorModalInstance.hide();
+    }
+
+    // Reload templates
+    await loadTemplates();
+
+    // Select the newly created template
+    selectedTemplateId.value = templateToSave.id;
+    await onTemplateChange();
+  } catch (err) {
+    console.error('Error creating template:', err);
+    error.value = 'Failed to create template';
+  }
+};
+
+// Confirm add items to existing template
+const confirmAddToTemplate = async () => {
+  if (!selectedTemplate.value || newTemplateData.value.items.length === 0) {
+    error.value = 'No template selected or no items to add';
+    return;
+  }
+
+  try {
+    // Get existing items
+    const existingItems = (selectedTemplate.value.items || []).map(item => ({
+      PriceCode: String(item.PriceCode),
+      description: String(item.description || item.Description),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // Filter out duplicates from new items
+    const existingCodes = existingItems.map(item => item.PriceCode);
+    const newItems = newTemplateData.value.items
+      .filter(item => !existingCodes.includes(item.PriceCode))
+      .map(item => ({
+        PriceCode: String(item.PriceCode),
+        description: String(item.description),
+        Unit: String(item.Unit || ''),
+        Price: Number(item.Price || 0),
+        CostCentre: String(item.CostCentre || ''),
+        quantity: Number(item.quantity || 1)
+      }));
+
+    if (newItems.length === 0) {
+      error.value = 'All selected items are already in the template';
+      return;
+    }
+
+    // Create updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: [...existingItems, ...newItems],
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    success.value = `Added ${newItems.length} item(s) to template "${selectedTemplate.value.templateName}"`;
+    setTimeout(() => success.value = null, 3000);
+
+    // Hide modal
+    if (templateEditorModalInstance) {
+      templateEditorModalInstance.hide();
+    }
+
+    // Reload templates to refresh the current template
+    await loadTemplates();
+  } catch (err) {
+    console.error('Error adding items to template:', err);
+    error.value = 'Failed to add items to template';
+  }
+};
+
+// Handle delete item from template
+const handleDeleteItem = async (item) => {
+  if (!selectedTemplate.value || !item) return;
+
+  // Confirm deletion
+  if (!confirm(`Are you sure you want to remove "${item.description || item.Description}" from this template?`)) {
+    return;
+  }
+
+  try {
+    // Filter out the item by PriceCode and serialize to plain objects
+    const updatedItems = (selectedTemplate.value.items || [])
+      .filter(i => i.PriceCode !== item.PriceCode)
+      .map(i => ({
+        PriceCode: String(i.PriceCode),
+        description: String(i.description || i.Description),
+        Unit: String(i.Unit || ''),
+        Price: Number(i.Price || 0),
+        CostCentre: String(i.CostCentre || ''),
+        quantity: Number(i.quantity || 1)
+      }));
+
+    // Create updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: updatedItems,
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    success.value = `Removed "${item.description || item.Description}" from template`;
+    setTimeout(() => success.value = null, 3000);
+
+    // Reload templates to refresh the current template
+    await loadTemplates();
+  } catch (err) {
+    console.error('Error deleting item from template:', err);
+    error.value = 'Failed to delete item from template';
+  }
 };
 
 // Handle update prices
@@ -590,37 +1512,334 @@ const handleExportToExcel = () => {
   }
 };
 
-// Handle delete template
-const handleDeleteTemplate = () => {
+// Handle delete - shows modal for either deleting items or entire template
+const handleDelete = () => {
   if (deleteTemplateModalInstance) {
     deleteTemplateModalInstance.show();
   }
 };
 
-// Confirm delete template
+// Confirm delete - routes to appropriate delete function
+const confirmDelete = async () => {
+  if (selectedRows.value.length > 0) {
+    // Delete selected items
+    await confirmDeleteItems();
+  } else {
+    // Delete entire template
+    await confirmDeleteTemplate();
+  }
+};
+
+// Confirm delete selected items
+const confirmDeleteItems = async () => {
+  if (!selectedTemplate.value || selectedRows.value.length === 0) return;
+
+  try {
+    // Get PriceCodes of items to delete
+    const priceCodesToDelete = selectedRows.value.map(item => item.PriceCode);
+
+    // Filter out the items
+    const updatedItems = (selectedTemplate.value.items || [])
+      .filter(item => !priceCodesToDelete.includes(item.PriceCode))
+      .map(item => ({
+        PriceCode: String(item.PriceCode),
+        description: String(item.description),
+        Unit: String(item.Unit || ''),
+        Price: Number(item.Price || 0),
+        CostCentre: String(item.CostCentre || ''),
+        quantity: Number(item.quantity || 1)
+      }));
+
+    // Create updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: updatedItems,
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    // Hide modal
+    if (deleteTemplateModalInstance) {
+      deleteTemplateModalInstance.hide();
+    }
+
+    success.value = `Deleted ${selectedRows.value.length} item(s) from template "${selectedTemplate.value.templateName}"`;
+    setTimeout(() => success.value = null, 3000);
+
+    // Reload templates to refresh the current template
+    await loadTemplates();
+
+    // Clear selections
+    if (gridApi.value) {
+      gridApi.value.deselectAll();
+    }
+  } catch (err) {
+    console.error('Error deleting items from template:', err);
+    error.value = 'Failed to delete items from template';
+  }
+};
+
+// Confirm delete entire template
 const confirmDeleteTemplate = async () => {
-  if (selectedTemplate.value) {
-    try {
-      const response = await api.templatesStore.delete(selectedTemplate.value.id);
-      if (response?.success) {
-        if (deleteTemplateModalInstance) {
-          deleteTemplateModalInstance.hide();
-        }
+  if (!selectedTemplate.value) return;
 
-        success.value = 'Template deleted successfully';
-        setTimeout(() => (success.value = null), 3000);
-
-        selectedTemplateId.value = '';
-        selectedTemplate.value = null;
-        await loadTemplates();
-      } else {
-        error.value = 'Failed to delete template';
+  try {
+    const response = await api.templatesStore.delete(selectedTemplate.value.id);
+    if (response?.success) {
+      if (deleteTemplateModalInstance) {
+        deleteTemplateModalInstance.hide();
       }
-    } catch (err) {
-      console.error('Error deleting template:', err);
+
+      success.value = 'Template deleted successfully';
+      setTimeout(() => (success.value = null), 3000);
+
+      selectedTemplateId.value = '';
+      selectedTemplate.value = null;
+      await loadTemplates();
+    } else {
       error.value = 'Failed to delete template';
     }
+  } catch (err) {
+    console.error('Error deleting template:', err);
+    error.value = 'Failed to delete template';
   }
+};
+
+// ===== Add from Catalogue Modal Functions =====
+
+// Handle add from catalogue button
+const handleAddFromCatalogue = async () => {
+  if (!selectedTemplate.value) return;
+
+  // Open modal
+  if (addFromCatalogueModalInstance) {
+    addFromCatalogueModalInstance.show();
+  }
+
+  // Load cost centres and initial catalogue items
+  await loadCatalogueCostCentres();
+  await loadCatalogueItems();
+};
+
+// Load catalogue cost centres
+const loadCatalogueCostCentres = async () => {
+  try {
+    const response = await api.costCentres.getList({});
+    if (response?.success) {
+      catalogueCostCentres.value = response.data || [];
+      console.log(`Loaded ${catalogueCostCentres.value.length} cost centres for add modal`);
+    }
+  } catch (err) {
+    console.error('Error loading cost centres:', err);
+  }
+};
+
+// Load catalogue items
+const loadCatalogueItems = async () => {
+  loadingCatalogue.value = true;
+
+  try {
+    const params = {
+      limit: 999999,
+      offset: 0,
+      showArchived: false
+    };
+
+    if (catalogueSearchTerm.value) {
+      params.searchTerm = catalogueSearchTerm.value;
+    }
+
+    if (catalogueCostCentre.value) {
+      params.costCentre = catalogueCostCentre.value;
+    }
+
+    const response = await api.catalogue.getItems(params);
+
+    if (response?.success) {
+      catalogueItems.value = response.data || [];
+    } else {
+      error.value = 'Failed to load catalogue items';
+      catalogueItems.value = [];
+    }
+  } catch (err) {
+    console.error('Error loading catalogue items:', err);
+    error.value = 'Error loading catalogue items';
+    catalogueItems.value = [];
+  } finally {
+    loadingCatalogue.value = false;
+  }
+};
+
+// Catalogue search change handler with debounce
+const onCatalogueSearchChange = () => {
+  clearTimeout(catalogueSearchDebounce);
+  catalogueSearchDebounce = setTimeout(() => {
+    loadCatalogueItems();
+  }, 500);
+};
+
+// Clear catalogue search
+const clearCatalogueSearch = () => {
+  catalogueSearchTerm.value = '';
+  loadCatalogueItems();
+};
+
+// Catalogue cost centre change handler
+const onCatalogueCostCentreChange = () => {
+  loadCatalogueItems();
+};
+
+// Catalogue grid ready handler
+const onCatalogueGridReady = (params) => {
+  catalogueGridApi.value = params.api;
+};
+
+// Catalogue selection changed handler
+const onCatalogueSelectionChanged = () => {
+  if (catalogueGridApi.value) {
+    catalogueSelectedRows.value = catalogueGridApi.value.getSelectedRows();
+  }
+};
+
+// Confirm add from catalogue
+const confirmAddFromCatalogue = async () => {
+  if (!selectedTemplate.value || catalogueSelectedRows.value.length === 0) return;
+
+  try {
+    const itemsToAdd = catalogueSelectedRows.value.map(row => ({
+      PriceCode: String(row.ItemCode),
+      description: String(row.Description),
+      Unit: String(row.Unit || ''),
+      Price: Number(row.LatestPrice || 0),
+      CostCentre: String(row.CostCentre || ''),
+      quantity: 1
+    }));
+
+    // Get existing items
+    const existingItems = (selectedTemplate.value.items || []).map(item => ({
+      PriceCode: String(item.PriceCode),
+      description: String(item.description),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // Create updated template
+    const templateToSave = {
+      id: String(selectedTemplate.value.id),
+      templateName: String(selectedTemplate.value.templateName),
+      description: String(selectedTemplate.value.description || ''),
+      items: [...existingItems, ...itemsToAdd],
+      dateCreated: String(selectedTemplate.value.dateCreated),
+      dateModified: new Date().toISOString()
+    };
+
+    await api.templatesStore.save(templateToSave);
+
+    success.value = `Added ${catalogueSelectedRows.value.length} item(s) to template "${selectedTemplate.value.templateName}"`;
+    setTimeout(() => success.value = null, 3000);
+
+    // Hide modal
+    if (addFromCatalogueModalInstance) {
+      addFromCatalogueModalInstance.hide();
+    }
+
+    // Reload templates to refresh the current template
+    await loadTemplates();
+
+    // Clear selections
+    catalogueSelectedRows.value = [];
+    catalogueSearchTerm.value = '';
+    catalogueCostCentre.value = '';
+  } catch (err) {
+    console.error('Error adding items to template:', err);
+    error.value = 'Failed to add items to template';
+  }
+};
+
+// ===== zzTakeoff Integration =====
+
+// Send to zzTakeoff (real integration)
+const handleSendToZzTakeoff = async () => {
+  if (selectedRows.value.length === 0) return;
+
+  try {
+    console.log('[zzTakeoff] Preparing to send items:', selectedRows.value);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Send the first item (single item mode)
+    const row = selectedRows.value[0];
+
+    // Use the item's zzType if already resolved, otherwise use default
+    const zzType = row.zzType || 'count';
+    console.log(`[zzType] Using type for ${row.PriceCode}: ${zzType}`);
+
+    // Build the JavaScript code to execute in zzTakeoff.com
+    const jsCode = `
+      startTakeoffWithProperties({
+        type: ${JSON.stringify(zzType)},
+        properties: {
+          description: {
+            value: ${JSON.stringify(row.description || row.Description || '')}
+          },
+          unit: {
+            value: ${JSON.stringify(row.Unit || '')}
+          },
+          price: {
+            value: ${JSON.stringify(row.Price ? row.Price.toString() : '0')}
+          },
+          'cost centre': {
+            value: ${JSON.stringify(row.CostCentre || '')}
+          }
+        }
+      });
+    `;
+
+    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+
+    // Execute the JavaScript in the BrowserView
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    console.log('[zzTakeoff] JavaScript execution result:', result);
+
+    // Add to send history
+    await api.sendHistory.add({
+      items: [{
+        code: row.PriceCode,
+        description: row.description || row.Description,
+        unit: row.Unit,
+        price: row.Price,
+        quantity: row.quantity || 1
+      }],
+      project: 'Template: ' + selectedTemplate.value.templateName,
+      status: result.success ? 'Success' : 'Failed',
+      sentAt: new Date().toISOString(),
+      itemCount: 1
+    });
+
+    success.value = `Sent "${row.description || row.Description}" to zzTakeoff`;
+    setTimeout(() => success.value = null, 3000);
+
+  } catch (err) {
+    console.error('Error sending to zzTakeoff:', err);
+    error.value = `Failed to send item to zzTakeoff: ${err.message}`;
+  }
+};
+
+// Send single item to zzTakeoff
+const handleSendSingleItemToZzTakeoff = async (item) => {
+  selectedRows.value = [item];
+  await handleSendToZzTakeoff();
 };
 
 // ===== Column Management Functions =====
@@ -860,6 +2079,16 @@ const loadLastTemplate = async () => {
       if (templateExists) {
         selectedTemplateId.value = lastTemplateId;
         selectedTemplate.value = templateExists;
+
+        // Resolve zzType for all items in the template
+        if (selectedTemplate.value && selectedTemplate.value.items) {
+          await resolveZzTypesForItems(selectedTemplate.value.items);
+
+          // Force grid refresh if grid is ready
+          if (gridApi.value) {
+            gridApi.value.refreshCells({ force: true });
+          }
+        }
       }
     }
   } catch (err) {
@@ -892,12 +2121,20 @@ onMounted(async () => {
     deleteTemplateModalInstance = new Modal(deleteTemplateModal.value);
   }
 
+  if (addFromCatalogueModal.value) {
+    addFromCatalogueModalInstance = new Modal(addFromCatalogueModal.value);
+  }
+
   if (columnManagementModalRef.value) {
     columnManagementModal = new Modal(columnManagementModalRef.value);
   }
 
   if (renameColumnModalRef.value) {
     renameColumnModal = new Modal(renameColumnModalRef.value);
+  }
+
+  if (templateEditorModal.value) {
+    templateEditorModalInstance = new Modal(templateEditorModal.value);
   }
 
   // Listen for preference updates
