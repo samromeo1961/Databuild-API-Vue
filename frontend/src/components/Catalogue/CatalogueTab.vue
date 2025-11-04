@@ -1313,7 +1313,36 @@ const loadColumnState = async () => {
       const savedData = JSON.parse(result.data.columnState);
       console.log('[DEBUG] loadColumnState: Parsed saved data:', savedData);
 
-      // Apply column header names (aliases) FIRST - update the columnDefs ref
+      // Apply column state (order, width, visibility, pinned) FIRST
+      if (savedData.state) {
+        console.log('[DEBUG] loadColumnState: Applying column state...');
+
+        // Log column info for debugging
+        savedData.state.forEach(col => {
+          if (col.width) {
+            console.log(`[DEBUG] loadColumnState: Column ${col.colId} - width: ${col.width}, hide: ${col.hide}, pinned: ${col.pinned}`);
+          }
+        });
+
+        // Apply the saved column state with order
+        console.log('[DEBUG] loadColumnState: Applying column state with order...');
+        console.log('[DEBUG] loadColumnState: Saved order:', savedData.state.map(c => c.colId));
+
+        // Get current state to see what we're starting with
+        const beforeState = gridApi.value.getColumnState().map(c => c.colId);
+        console.log('[DEBUG] loadColumnState: Current order before apply:', beforeState);
+
+        // Apply the full column state including order
+        gridApi.value.applyColumnState({
+          state: savedData.state,
+          applyOrder: true // Apply the saved column order
+        });
+
+        console.log('[DEBUG] loadColumnState: Column state applied (including widths, order, visibility, and pinning)');
+        console.log('[DEBUG] loadColumnState: Verifying order after apply:', gridApi.value.getColumnState().map(c => c.colId));
+      }
+
+      // Apply column header names (aliases) AFTER column state - so they don't get overridden
       if (savedData.headerNames) {
         console.log('[DEBUG] loadColumnState: Applying header names:', savedData.headerNames);
 
@@ -1337,46 +1366,6 @@ const loadColumnState = async () => {
         console.log('[DEBUG] loadColumnState: Refreshing headers...');
         gridApi.value.refreshHeader();
         console.log('[DEBUG] loadColumnState: Headers refreshed');
-      }
-
-      // Apply column state (order, width, visibility, pinned) AFTER header names
-      if (savedData.state) {
-        console.log('[DEBUG] loadColumnState: Applying column state...');
-
-        // Log column info for debugging
-        savedData.state.forEach(col => {
-          if (col.width) {
-            console.log(`[DEBUG] loadColumnState: Column ${col.colId} - width: ${col.width}, hide: ${col.hide}, pinned: ${col.pinned}`);
-          }
-        });
-
-        // Apply the saved column state with order
-        console.log('[DEBUG] loadColumnState: Applying column state with order...');
-        console.log('[DEBUG] loadColumnState: Saved order:', savedData.state.map(c => c.colId));
-
-        // Get current state to see what we're starting with
-        const beforeState = gridApi.value.getColumnState().map(c => c.colId);
-        console.log('[DEBUG] loadColumnState: Current order before apply:', beforeState);
-
-        // Strategy: Reorder the columnDefs array to match saved order, then refresh grid
-        const savedOrder = savedData.state.map(c => c.colId);
-        const reorderedColumnDefs = savedOrder
-          .map(colId => columnDefs.value.find(def => def.field === colId))
-          .filter(def => def !== undefined);
-
-        console.log('[DEBUG] loadColumnState: Reordered columnDefs:', reorderedColumnDefs.map(c => c.field));
-
-        // Update the columnDefs ref
-        columnDefs.value = reorderedColumnDefs;
-
-        // Now apply the rest of the state (width, visibility, pinning)
-        gridApi.value.applyColumnState({
-          state: savedData.state,
-          applyOrder: false // Don't rely on applyOrder, we already reordered columnDefs
-        });
-
-        console.log('[DEBUG] loadColumnState: Column state applied (including widths, order, visibility, and pinning)');
-        console.log('[DEBUG] loadColumnState: Verifying order after apply:', gridApi.value.getColumnState().map(c => c.colId));
       }
     } else {
       console.log('[DEBUG] loadColumnState: No saved column state found');
