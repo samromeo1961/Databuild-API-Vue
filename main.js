@@ -677,6 +677,11 @@ ipcMain.handle('webview:execute-javascript', async (event, code) => {
 // App Lifecycle
 // ============================================================
 
+// Disable hardware acceleration to prevent crashes (especially on OneDrive synced folders)
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 app.whenReady().then(async () => {
   console.log('🚀 App ready, starting initialization...');
 
