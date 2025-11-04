@@ -92,15 +92,19 @@ function createMainWindow() {
     console.log('✓ Window maximized (openExpanded preference)');
     console.log('Window isMaximized:', mainWindow.isMaximized());
     console.log('Window bounds:', mainWindow.getBounds());
-
-    // Show window after maximizing
-    mainWindow.once('ready-to-show', () => {
-      mainWindow.show();
-      console.log('Window shown. isMaximized:', mainWindow.isMaximized());
-      console.log('Window isVisible:', mainWindow.isVisible());
-      console.log('Window bounds after show:', mainWindow.getBounds());
-    });
   }
+
+  // Show window after DOM is ready (either maximized or normal)
+  mainWindow.once('ready-to-show', () => {
+    if (shouldMaximize && !mainWindow.isVisible()) {
+      // Re-maximize just before showing to ensure it's applied
+      mainWindow.maximize();
+    }
+    mainWindow.show();
+    console.log('Window shown. isMaximized:', mainWindow.isMaximized());
+    console.log('Window isVisible:', mainWindow.isVisible());
+    console.log('Window bounds after show:', mainWindow.getBounds());
+  });
 
   // Create application menu
   const menuTemplate = [
