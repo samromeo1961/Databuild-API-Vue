@@ -26,7 +26,8 @@ export function useElectronAPI() {
       getItem: (priceCode) => window.electronAPI?.catalogue.getItem(priceCode),
       archiveItem: (params) => window.electronAPI?.catalogue.archiveItem(params),
       updateField: (params) => window.electronAPI?.catalogue.updateField(params),
-      updatePrice: (params) => window.electronAPI?.catalogue.updatePrice(params)
+      updatePrice: (params) => window.electronAPI?.catalogue.updatePrice(params),
+      getUnits: () => window.electronAPI?.catalogue.getUnits()
     },
 
     // Recipes

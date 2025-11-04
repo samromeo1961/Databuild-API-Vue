@@ -317,6 +317,7 @@ ipcMain.handle('catalogue:get-item', catalogueHandlers.getCatalogueItem);
 ipcMain.handle('catalogue:archive-item', catalogueHandlers.archiveItem);
 ipcMain.handle('catalogue:update-field', catalogueHandlers.updateField);
 ipcMain.handle('catalogue:update-price', catalogueHandlers.updatePrice);
+ipcMain.handle('catalogue:get-units', catalogueHandlers.getUnits);
 
 // ============================================================
 // IPC Handlers for Recipes

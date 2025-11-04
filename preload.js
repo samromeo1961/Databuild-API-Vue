@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getItem: (priceCode) => ipcRenderer.invoke('catalogue:get-item', priceCode),
     archiveItem: (params) => ipcRenderer.invoke('catalogue:archive-item', params),
     updateField: (params) => ipcRenderer.invoke('catalogue:update-field', params),
-    updatePrice: (params) => ipcRenderer.invoke('catalogue:update-price', params)
+    updatePrice: (params) => ipcRenderer.invoke('catalogue:update-price', params),
+    getUnits: () => ipcRenderer.invoke('catalogue:get-units')
   },
 
   // Recipes

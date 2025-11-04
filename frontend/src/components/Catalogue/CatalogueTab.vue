@@ -434,6 +434,7 @@ const currentPage = ref(0);
 const sortField = ref(null);
 const sortOrder = ref('asc');
 const columnFilters = ref({});
+const availableUnits = ref([]);
 
 // Template modal state
 const addToTemplateModal = ref(null);
@@ -508,6 +509,10 @@ const columnDefs = ref([
     filter: 'agTextColumnFilter',
     sortable: true,
     editable: (params) => params.data.Unit !== 'HEADING',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: () => availableUnits.value
+    },
     tooltipValueGetter: (params) => params.value
   },
   {
@@ -1917,11 +1922,68 @@ const loadFilterState = async () => {
   }
 };
 
+/**
+ * Load saved column aliases EARLY - before grid initializes
+ * This applies saved header names directly to columnDefs ref
+ * so the grid gets the correct names from the start
+ */
+const loadColumnAliasesEarly = async () => {
+  try {
+    console.log('[DEBUG] loadColumnAliasesEarly: Loading saved column aliases...');
+
+    const result = await api.columnStates.get('catalogue');
+
+    if (result?.success && result?.data?.columnState) {
+      const savedData = JSON.parse(result.data.columnState);
+
+      if (savedData.headerNames && Object.keys(savedData.headerNames).length > 0) {
+        console.log('[DEBUG] loadColumnAliasesEarly: Found saved header names:', savedData.headerNames);
+
+        // Apply header names to columnDefs ref BEFORE grid uses them
+        columnDefs.value.forEach(colDef => {
+          if (colDef.field && savedData.headerNames[colDef.field]) {
+            const oldName = colDef.headerName;
+            const newName = savedData.headerNames[colDef.field];
+            colDef.headerName = newName;
+            console.log(`[DEBUG] loadColumnAliasesEarly: ${colDef.field}: "${oldName}" → "${newName}"`);
+          }
+        });
+
+        console.log('[DEBUG] loadColumnAliasesEarly: Column aliases applied to columnDefs');
+      } else {
+        console.log('[DEBUG] loadColumnAliasesEarly: No saved header names found');
+      }
+    } else {
+      console.log('[DEBUG] loadColumnAliasesEarly: No saved column state found');
+    }
+  } catch (err) {
+    console.error('[DEBUG] loadColumnAliasesEarly: Error loading aliases:', err);
+  }
+};
+
+// Fetch available units from database
+const fetchUnits = async () => {
+  try {
+    const result = await api.catalogue.getUnits();
+    if (result && result.success && result.data) {
+      availableUnits.value = result.data.map(unit => unit.Printout);
+      console.log('[DEBUG] Loaded units:', availableUnits.value);
+    }
+  } catch (err) {
+    console.error('Error fetching units:', err);
+  }
+};
+
 // Listen for preferences updates
 onMounted(async () => {
+  // CRITICAL: Load column aliases FIRST, before grid initializes
+  // This ensures columnDefs has correct header names from the start
+  await loadColumnAliasesEarly();
+
   loadPageSize();
   loadCostCentres();
   loadTemplates();
+  fetchUnits();
 
   // Load saved filter state
   await loadFilterState();

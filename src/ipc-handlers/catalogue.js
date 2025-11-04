@@ -550,10 +550,46 @@ async function updatePrice(event, params) {
   }
 }
 
+/**
+ * Get all available units from PerCodes table
+ * IPC Handler: 'catalogue:get-units'
+ */
+async function getUnits(event) {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    const query = `
+      SELECT Code, Printout, Display
+      FROM PerCodes
+      WHERE Printout IS NOT NULL AND Printout <> ''
+      ORDER BY Printout
+    `;
+
+    const result = await pool.request().query(query);
+
+    return {
+      success: true,
+      data: result.recordset
+    };
+
+  } catch (err) {
+    console.error('Error fetching units:', err);
+    return {
+      success: false,
+      error: 'Failed to fetch units',
+      message: err.message
+    };
+  }
+}
+
 module.exports = {
   getCatalogueItems,
   getCatalogueItem,
   archiveItem,
   updateField,
-  updatePrice
+  updatePrice,
+  getUnits
 };
