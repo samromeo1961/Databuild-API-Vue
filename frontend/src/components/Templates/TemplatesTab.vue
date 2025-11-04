@@ -1789,13 +1789,16 @@ const handleSendToZzTakeoff = async () => {
       startTakeoffWithProperties({
         type: ${JSON.stringify(zzType)},
         properties: {
-          description: {
+          name: {
             value: ${JSON.stringify(row.description || row.Description || '')}
+          },
+          sku: {
+            value: ${JSON.stringify(row.PriceCode || '')}
           },
           unit: {
             value: ${JSON.stringify(row.Unit || '')}
           },
-          price: {
+          'Cost Each': {
             value: ${JSON.stringify(row.Price ? row.Price.toString() : '0')}
           },
           'cost centre': {

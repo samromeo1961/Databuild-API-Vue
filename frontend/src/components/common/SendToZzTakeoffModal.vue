@@ -418,8 +418,48 @@ const sendToZzTakeoff = async () => {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
 
+    // Transform items to zzTakeoff format
+    const zzTakeoffItems = itemsConfig.value.map(item => {
+      // Map takeoffType to lowercase for zzTakeoff
+      const typeMapping = {
+        'Area': 'area',
+        'Linear': 'linear',
+        'Segment': 'segment',
+        'Count': 'count'
+      };
+
+      return {
+        type: typeMapping[item.takeoffType] || 'count',
+        properties: {
+          name: {
+            value: item.description
+          },
+          sku: {
+            value: item.code
+          },
+          unit: {
+            value: item.units
+          },
+          'Cost Each': {
+            value: item.costEach.toString()
+          },
+          'cost centre': {
+            value: item.originalItem?.CostCentre || ''
+          }
+        }
+      };
+    });
+
     const payload = {
       project: selectedProject.value,
+      items: zzTakeoffItems,
+      totalCost: totalCost.value,
+      timestamp: new Date().toISOString()
+    };
+
+    // Save to send history (with original format for display)
+    await api.sendHistory.add({
+      project: selectedProject.value.name,
       items: itemsConfig.value.map(item => ({
         code: item.code,
         description: item.description,
@@ -431,14 +471,6 @@ const sendToZzTakeoff = async () => {
         quantity: item.quantity,
         total: (item.costEach * item.quantity) * (1 + item.markup/100)
       })),
-      totalCost: totalCost.value,
-      timestamp: new Date().toISOString()
-    };
-
-    // Save to send history
-    await api.sendHistory.add({
-      project: selectedProject.value.name,
-      items: payload.items,
       status: 'Success (Simulated)',
       sentAt: payload.timestamp,
       itemCount: payload.items.length,
@@ -450,7 +482,7 @@ const sendToZzTakeoff = async () => {
       message: `Successfully sent ${payload.items.length} items to zzTakeoff project "${selectedProject.value.name}"`
     };
 
-    console.log('zzTakeoff payload:', payload);
+    console.log('[zzTakeoff] Items ready for startTakeoffWithProperties:', JSON.stringify(zzTakeoffItems, null, 2));
 
     emit('sent', payload);
   } catch (err) {

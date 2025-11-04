@@ -277,6 +277,9 @@ async function getCatalogueItems(event, params) {
     // Note: Recipe filter doesn't need parameters as it's a direct comparison
     if (LatestPrice) countRequest.input('latestPriceFilter', parseFloat(LatestPrice));
     if (LatestPriceDate) countRequest.input('latestPriceDateFilter', LatestPriceDate);
+    // Add date parameters for count query CTE
+    if (dateFrom) countRequest.input('dateFrom', dateFrom);
+    if (dateTo) countRequest.input('dateTo', dateTo);
 
     const [result, countResult] = await Promise.all([
       request.query(query),

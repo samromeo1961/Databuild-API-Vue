@@ -1545,23 +1545,17 @@ const handleSendToZzTakeoff = async () => {
           name: {
             value: ${JSON.stringify(row.Description || '')}
           },
-          color: {
-            value: '#FF6B35'
-          },
-          'product id': {
+          sku: {
             value: ${JSON.stringify(row.ItemCode || '')}
           },
           unit: {
             value: ${JSON.stringify(row.Unit || '')}
           },
-          price: {
+          'Cost Each': {
             value: ${JSON.stringify(row.LatestPrice ? row.LatestPrice.toString() : '0')}
           },
           'cost centre': {
             value: ${JSON.stringify(row.CostCentre || '')}
-          },
-          'cost centre name': {
-            value: ${JSON.stringify(row.CostCentreName || '')}
           }
         }
       });
