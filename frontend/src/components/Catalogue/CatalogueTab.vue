@@ -959,6 +959,16 @@ const onGridReady = (params) => {
   });
   params.api.addEventListener('columnResized', (event) => {
     if (event.finished) {
+      // If a column with flex was manually resized, clear flex to preserve the width
+      if (event.column && event.source === 'uiColumnDragged') {
+        const colDef = event.column.getColDef();
+        if (colDef && colDef.flex) {
+          console.log(`[DEBUG] Column ${event.column.getColId()} was manually resized, clearing flex property`);
+          colDef.flex = null;
+          // Store the new width
+          colDef.width = event.column.getActualWidth();
+        }
+      }
       saveColumnState(event);
     }
   });
@@ -1336,6 +1346,19 @@ const loadColumnState = async () => {
         gridApi.value.applyColumnState({
           state: savedData.state,
           applyOrder: true // Apply the saved column order
+        });
+
+        // Clear flex property for columns that have saved widths
+        // This ensures saved widths take precedence over flex
+        savedData.state.forEach(colState => {
+          if (colState.width) {
+            const colDef = gridApi.value.getColumnDef(colState.colId);
+            if (colDef && colDef.flex) {
+              console.log(`[DEBUG] loadColumnState: Clearing flex for ${colState.colId} (has saved width: ${colState.width})`);
+              colDef.flex = null;
+              colDef.width = colState.width;
+            }
+          }
         });
 
         console.log('[DEBUG] loadColumnState: Column state applied (including widths, order, visibility, and pinning)');
