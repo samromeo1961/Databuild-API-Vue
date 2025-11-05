@@ -3,6 +3,7 @@ const {
   addToFavourites,
   removeFromFavourites,
   isInFavourites,
+  updateFavourite,
   clearFavourites
 } = require('../database/favourites-store');
 
@@ -83,6 +84,23 @@ async function handleIsInFavourites(event, params) {
 }
 
 /**
+ * Update a favourite
+ * IPC Handler: 'favourites-store:update'
+ */
+async function handleUpdateFavourite(event, updateData) {
+  try {
+    return updateFavourite(updateData);
+  } catch (err) {
+    console.error('Error updating favourite:', err);
+    return {
+      success: false,
+      error: 'Failed to update favourite',
+      message: err.message
+    };
+  }
+}
+
+/**
  * Clear all favourites
  * IPC Handler: 'favourites-store:clear'
  */
@@ -104,5 +122,6 @@ module.exports = {
   handleAddToFavourites,
   handleRemoveFromFavourites,
   handleIsInFavourites,
+  handleUpdateFavourite,
   handleClearFavourites
 };

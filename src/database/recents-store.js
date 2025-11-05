@@ -49,6 +49,7 @@ function addToRecents(item) {
 
     const recentItem = {
       ...item,
+      zzType: item.zzType || recentsObj[key]?.zzType || 'count', // Preserve existing zzType or default to 'count'
       lastUsed: new Date().toISOString(),
       useCount: (recentsObj[key]?.useCount || 0) + 1,
       userId: 'default'
@@ -93,6 +94,45 @@ function addToRecents(item) {
 }
 
 /**
+ * Update a recent item (e.g., to update zzType)
+ * @param {Object} updateData - Data to update
+ * @param {string} updateData.PriceCode - Item price code
+ * @returns {Object} Result object with success status
+ */
+function updateRecent(updateData) {
+  try {
+    const { PriceCode, ...updates } = updateData;
+    const recentsObj = recentsStore.get('recents', {});
+
+    if (!recentsObj[PriceCode]) {
+      return {
+        success: false,
+        error: 'Item not found in recents'
+      };
+    }
+
+    // Merge updates with existing item
+    recentsObj[PriceCode] = {
+      ...recentsObj[PriceCode],
+      ...updates
+    };
+
+    recentsStore.set('recents', recentsObj);
+
+    return {
+      success: true,
+      message: 'Recent updated successfully'
+    };
+  } catch (err) {
+    console.error('Error updating recent:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
+
+/**
  * Clear all recents
  * @returns {Object} Result object with success status
  */
@@ -116,5 +156,6 @@ function clearRecents() {
 module.exports = {
   getRecents,
   addToRecents,
+  updateRecent,
   clearRecents
 };

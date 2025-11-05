@@ -119,6 +119,7 @@ export function useElectronAPI() {
       add: (item) => window.electronAPI?.favouritesStore.add(item),
       remove: (priceCode) => window.electronAPI?.favouritesStore.remove(priceCode),
       check: (priceCode) => window.electronAPI?.favouritesStore.check(priceCode),
+      update: (updateData) => window.electronAPI?.favouritesStore.update(updateData),
       clear: () => window.electronAPI?.favouritesStore.clear()
     },
 
@@ -126,6 +127,7 @@ export function useElectronAPI() {
     recentsStore: {
       getList: (params) => window.electronAPI?.recentsStore.getList(params),
       add: (item) => window.electronAPI?.recentsStore.add(item),
+      update: (updateData) => window.electronAPI?.recentsStore.update(updateData),
       clear: () => window.electronAPI?.recentsStore.clear()
     },
 

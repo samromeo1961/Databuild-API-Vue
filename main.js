@@ -16,6 +16,7 @@ const contactsHandlers = require('./src/ipc-handlers/contacts');
 const externalApiHandlers = require('./src/ipc-handlers/external-api');
 const sendHistoryHandlers = require('./src/ipc-handlers/send-history');
 const preferencesStoreHandlers = require('./src/ipc-handlers/preferences-store');
+const templatesHandlers = require('./src/ipc-handlers/templates');
 const templatesStoreHandlers = require('./src/ipc-handlers/templates-store');
 const favouritesStoreHandlers = require('./src/ipc-handlers/favourites-store');
 const recentsStoreHandlers = require('./src/ipc-handlers/recents-store');
@@ -422,6 +423,12 @@ ipcMain.handle('filter-state:get-all', filterStateHandlers.handleGetAllFilterSta
 ipcMain.handle('filter-state:clear-all', filterStateHandlers.handleClearAllFilterStates);
 
 // ============================================================
+// IPC Handlers for Templates (Database Operations)
+// ============================================================
+
+ipcMain.handle('templates:update-prices', templatesHandlers.updatePrices);
+
+// ============================================================
 // IPC Handlers for Templates Store (Persistent)
 // ============================================================
 
@@ -439,6 +446,7 @@ ipcMain.handle('favourites-store:get-list', favouritesStoreHandlers.handleGetFav
 ipcMain.handle('favourites-store:add', favouritesStoreHandlers.handleAddToFavourites);
 ipcMain.handle('favourites-store:remove', favouritesStoreHandlers.handleRemoveFromFavourites);
 ipcMain.handle('favourites-store:check', favouritesStoreHandlers.handleIsInFavourites);
+ipcMain.handle('favourites-store:update', favouritesStoreHandlers.handleUpdateFavourite);
 ipcMain.handle('favourites-store:clear', favouritesStoreHandlers.handleClearFavourites);
 
 // ============================================================
@@ -447,6 +455,7 @@ ipcMain.handle('favourites-store:clear', favouritesStoreHandlers.handleClearFavo
 
 ipcMain.handle('recents-store:get-list', recentsStoreHandlers.handleGetRecents);
 ipcMain.handle('recents-store:add', recentsStoreHandlers.handleAddToRecents);
+ipcMain.handle('recents-store:update', recentsStoreHandlers.handleUpdateRecent);
 ipcMain.handle('recents-store:clear', recentsStoreHandlers.handleClearRecents);
 
 // ============================================================
@@ -483,17 +492,23 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
       webView.setBounds(bounds);
       webView.setAutoResize({ width: true, height: true });
 
-      // Check if we need to navigate to a new URL or reload
+      // When restoring an existing BrowserView, preserve the current URL and session
+      // Don't navigate based on the passed URL parameter - that would log the user out!
       const currentURL = webView.webContents.getURL();
+      console.log('BrowserView restored, preserving current URL:', currentURL);
+
+      // Only load the requested URL if the BrowserView has no page loaded yet
       if (!currentURL || currentURL === '' || currentURL === 'about:blank') {
         console.log('BrowserView has no URL, loading:', url);
         await webView.webContents.loadURL(url);
-      } else if (currentURL !== url) {
-        console.log('BrowserView URL changed, navigating from', currentURL, 'to', url);
-        await webView.webContents.loadURL(url);
       } else {
-        console.log('BrowserView URL unchanged, reloading:', currentURL);
-        webView.webContents.reload();
+        console.log('BrowserView has existing session, keeping current page to preserve login');
+        // Force webContents to repaint by triggering a zoom reset
+        // This forces the rendering pipeline to refresh without reloading the page
+        const currentZoom = webView.webContents.getZoomFactor();
+        webView.webContents.setZoomFactor(currentZoom);
+        // Also invalidate to force repaint
+        webView.webContents.invalidate();
       }
 
       // Ensure WebContents is visible and focused

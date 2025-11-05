@@ -262,6 +262,7 @@
 
 <script setup>
 import { ref, computed, onMounted, inject } from 'vue';
+import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
@@ -269,6 +270,7 @@ import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
 const theme = inject('theme');
+const router = useRouter();
 
 // State
 const rowData = ref([]);
@@ -365,6 +367,67 @@ const columnDefs = ref([
     sortable: true
   },
   {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 150,
+    cellRenderer: (params) => {
+      const value = params.value || 'count';
+      const container = document.createElement('div');
+      container.className = 'd-flex align-items-center h-100';
+
+      // Display span (shows current value, click to edit)
+      const display = document.createElement('span');
+      display.className = 'form-control-plaintext px-2';
+      display.style.cursor = 'pointer';
+      display.style.color = 'var(--ag-foreground-color, inherit)';
+      const valueLabels = {
+        'count': 'Count',
+        'linear': 'Linear',
+        'area': 'Area',
+        'segment': 'Segment'
+      };
+      display.textContent = valueLabels[value] || 'Count';
+
+      // Dropdown select (hidden by default)
+      const select = document.createElement('select');
+      select.className = 'form-select form-select-sm';
+      select.style.display = 'none';
+      select.innerHTML = `
+        <option value="area" ${value === 'area' ? 'selected' : ''}>Area</option>
+        <option value="linear" ${value === 'linear' ? 'selected' : ''}>Linear</option>
+        <option value="segment" ${value === 'segment' ? 'selected' : ''}>Segment</option>
+        <option value="count" ${value === 'count' ? 'selected' : ''}>Count</option>
+      `;
+
+      // Double-click to show dropdown
+      display.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        display.style.display = 'none';
+        select.style.display = 'block';
+        select.focus();
+      });
+
+      // Handle selection change
+      select.addEventListener('change', (e) => {
+        params.data.zzType = e.target.value;
+        display.textContent = valueLabels[e.target.value] || 'Count';
+        select.style.display = 'none';
+        display.style.display = 'block';
+        handleZzTypeChange(params.data);
+      });
+
+      // Handle blur (close dropdown without saving)
+      select.addEventListener('blur', () => {
+        select.style.display = 'none';
+        display.style.display = 'block';
+      });
+
+      container.appendChild(display);
+      container.appendChild(select);
+      return container;
+    }
+  },
+  {
     field: 'LastAccessed',
     headerName: 'Last Accessed',
     width: 180,
@@ -379,6 +442,22 @@ const columnDefs = ref([
         hour: '2-digit',
         minute: '2-digit'
       });
+    }
+  },
+  {
+    field: 'actions',
+    headerName: 'Actions',
+    width: 100,
+    pinned: 'right',
+    cellRenderer: (params) => {
+      const button = document.createElement('button');
+      button.className = 'btn btn-sm btn-warning';
+      button.innerHTML = '<i class="bi bi-send"></i>';
+      button.title = 'Send to zzTakeoff';
+      button.addEventListener('click', () => {
+        handleSendToZzTakeoff(params.data);
+      });
+      return button;
     }
   }
 ]);
@@ -484,6 +563,176 @@ const handleExportToExcel = () => {
     });
     success.value = 'Exported to CSV';
     setTimeout(() => (success.value = null), 3000);
+  }
+};
+
+// Add to recents (update LastAccessed timestamp)
+const addToRecents = async (item) => {
+  try {
+    await api.recentsStore.add({
+      PriceCode: item.PriceCode,
+      Description: item.Description,
+      Unit: item.Unit,
+      Price: item.Price,
+      CostCentre: item.CostCentre,
+      LastAccessed: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Error adding to recents:', err);
+  }
+};
+
+// Handle zzType change
+const handleZzTypeChange = async (item) => {
+  try {
+    // Update the item in recents store with new zzType
+    const result = await api.recentsStore.update({
+      PriceCode: item.PriceCode,
+      zzType: item.zzType
+    });
+    console.log(`[Recents] zzType update result for ${item.PriceCode}:`, result);
+    console.log(`[Recents] Updated zzType to: ${item.zzType}`);
+
+    // Verify the data was saved by reading it back
+    const listResult = await api.recentsStore.getList();
+    const savedItem = listResult.data?.find(i => i.PriceCode === item.PriceCode);
+    console.log(`[Recents] Saved item from store:`, savedItem);
+  } catch (err) {
+    console.error('[Recents] Error updating zzType:', err);
+  }
+};
+
+// Send to zzTakeoff (real integration)
+const handleSendToZzTakeoff = async (item) => {
+  if (!item) return;
+
+  try {
+    console.log('[zzTakeoff] Preparing to send item:', item);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Check if we need to navigate to the takeoff page
+    // Only navigate if NOT already on the takeoff page (e.g., if on Reports, Community, etc.)
+    console.log('[zzTakeoff] Checking current page...');
+
+    try {
+      // Get the current URL
+      const getCurrentUrlScript = `(function() { return window.location.href; })()`;
+      const currentUrlResult = await api.webview.executeJavaScript(getCurrentUrlScript);
+      const currentUrl = currentUrlResult?.result || '';
+
+      console.log('[zzTakeoff] Current URL:', currentUrl);
+
+      // Check if already on the takeoff page
+      const isOnTakeoffPage = currentUrl.includes('/app/takeoff');
+
+      if (!isOnTakeoffPage) {
+        // Not on takeoff page - need to navigate
+        console.log('[zzTakeoff] Not on takeoff page, navigating...');
+
+        // Parse URL to extract projectId and pageId
+        let projectId = '';
+        let pageId = '';
+
+        try {
+          const url = new URL(currentUrl);
+          projectId = url.searchParams.get('projectId') || '';
+          pageId = url.searchParams.get('pageId') || '';
+          console.log('[zzTakeoff] Extracted projectId:', projectId, 'pageId:', pageId);
+        } catch (parseError) {
+          console.warn('[zzTakeoff] Could not parse current URL:', parseError);
+        }
+
+        // Build takeoff URL with preserved project context
+        let takeoffUrl = 'https://www.zztakeoff.com/app/takeoff';
+        if (projectId) {
+          const params = new URLSearchParams();
+          params.append('projectId', projectId);
+          if (pageId) {
+            params.append('pageId', pageId);
+          }
+          takeoffUrl += '?' + params.toString();
+        }
+
+        console.log('[zzTakeoff] Navigating to takeoff page:', takeoffUrl);
+
+        // Navigate to the takeoff page with preserved project context
+        await api.webview.navigate(takeoffUrl);
+        console.log('[zzTakeoff] Navigation initiated to takeoff page');
+
+        // Wait for navigation and page load
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        console.log('[zzTakeoff] Already on takeoff page, skipping navigation');
+        // Small delay to ensure page is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      console.log('[zzTakeoff] Ready to execute startTakeoffWithProperties');
+    } catch (navError) {
+      console.error('[zzTakeoff] Error checking/navigating to takeoff page:', navError);
+      throw new Error('Failed to navigate to zzTakeoff page: ' + navError.message);
+    }
+
+    // Build the JavaScript code to execute in zzTakeoff.com
+    const jsCode = `
+      startTakeoffWithProperties({
+        type: ${JSON.stringify(item.zzType || 'count')},
+        properties: {
+          name: {
+            value: ${JSON.stringify(item.Description || '')}
+          },
+          sku: {
+            value: ${JSON.stringify(item.PriceCode || '')}
+          },
+          unit: {
+            value: ${JSON.stringify(item.Unit || '')}
+          },
+          'Cost Each': {
+            value: ${JSON.stringify(item.Price ? item.Price.toString() : '0')}
+          },
+          'cost centre': {
+            value: ${JSON.stringify(item.CostCentre || '')}
+          }
+        }
+      });
+    `;
+
+    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+
+    // Execute the JavaScript in the BrowserView
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    console.log('[zzTakeoff] JavaScript execution result:', result);
+
+    // Add to send history
+    await api.sendHistory.add({
+      items: [{
+        code: item.PriceCode,
+        description: item.Description,
+        unit: item.Unit,
+        price: item.Price,
+        quantity: 1
+      }],
+      project: 'zzTakeoff Integration',
+      status: result.success ? 'Success' : 'Failed',
+      sentAt: new Date().toISOString(),
+      itemCount: 1
+    });
+
+    // Update LastAccessed in recents
+    await addToRecents(item);
+
+    success.value = `Sent "${item.Description}" to zzTakeoff`;
+    setTimeout(() => success.value = null, 3000);
+
+  } catch (err) {
+    console.error('Error sending to zzTakeoff:', err);
+    error.value = `Failed to send items to zzTakeoff: ${err.message}`;
   }
 };
 

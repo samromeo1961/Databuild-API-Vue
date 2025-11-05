@@ -40,6 +40,7 @@ function addToFavourites(item) {
     const key = item.PriceCode || item.priceCode;
     const favouriteItem = {
       ...item,
+      zzType: item.zzType || 'count', // Default to 'count' if not specified
       dateAdded: new Date().toISOString(),
       userId: 'default'
     };
@@ -110,6 +111,45 @@ function isInFavourites(priceCode) {
 }
 
 /**
+ * Update a favourite item (e.g., to update zzType)
+ * @param {Object} updateData - Data to update
+ * @param {string} updateData.PriceCode - Item price code
+ * @returns {Object} Result object with success status
+ */
+function updateFavourite(updateData) {
+  try {
+    const { PriceCode, ...updates } = updateData;
+    const favouritesObj = favouritesStore.get('favourites', {});
+
+    if (!favouritesObj[PriceCode]) {
+      return {
+        success: false,
+        error: 'Item not found in favourites'
+      };
+    }
+
+    // Merge updates with existing item
+    favouritesObj[PriceCode] = {
+      ...favouritesObj[PriceCode],
+      ...updates
+    };
+
+    favouritesStore.set('favourites', favouritesObj);
+
+    return {
+      success: true,
+      message: 'Favourite updated successfully'
+    };
+  } catch (err) {
+    console.error('Error updating favourite:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
+
+/**
  * Clear all favourites
  * @returns {Object} Result object with success status
  */
@@ -135,5 +175,6 @@ module.exports = {
   addToFavourites,
   removeFromFavourites,
   isInFavourites,
+  updateFavourite,
   clearFavourites
 };

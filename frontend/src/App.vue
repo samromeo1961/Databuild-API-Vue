@@ -187,6 +187,14 @@
       </div>
 
       <span class="text-muted small">Use dropdown to switch tabs or exit fullscreen mode</span>
+
+      <!-- Current Tab Heading -->
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <h5 class="mb-0 fw-bold current-tab-heading">
+          <i :class="currentTabIcon" class="me-2"></i>
+          {{ currentTabLabel }}
+        </h5>
+      </div>
     </div>
 
     <!-- Tab Content -->
@@ -245,6 +253,18 @@ const lastVisitedTabLabel = computed(() => {
   return tab ? tab.label : 'Tab';
 });
 
+// Computed label for the current tab
+const currentTabLabel = computed(() => {
+  const tab = allTabs.find(t => t.path === currentRoute.value);
+  return tab ? tab.label : 'Tab';
+});
+
+// Computed icon for the current tab
+const currentTabIcon = computed(() => {
+  const tab = allTabs.find(t => t.path === currentRoute.value);
+  return tab ? tab.icon : 'bi bi-app';
+});
+
 // Toggle navigation dropdown
 const toggleNavDropdown = () => {
   showNavDropdown.value = !showNavDropdown.value;
@@ -260,8 +280,8 @@ const goBackToLastTab = async () => {
 // Navigate to tab while staying maximized
 const navigateToTabMaximized = async (path) => {
   showNavDropdown.value = false; // Close dropdown after selection
-  // Save the selected tab as the last visited tab
-  lastVisitedTab.value = path;
+  // Save the CURRENT tab as the last visited tab before navigating
+  lastVisitedTab.value = router.currentRoute.value.path;
   await router.push(path);
   // Keep webviewMaximized.value as true - don't change it
 };
@@ -299,8 +319,8 @@ provide('toggleTheme', toggleTheme);
 
 // Watch for route changes to track the last visited tab
 watch(() => router.currentRoute.value.path, (newPath, oldPath) => {
-  // Update last visited tab when navigating (via tabs, not dropdown in maximized mode)
-  if (oldPath && newPath !== oldPath && !webviewMaximized.value) {
+  // Update last visited tab when navigating
+  if (oldPath && newPath !== oldPath) {
     lastVisitedTab.value = oldPath;
     console.log('Updated last visited tab to:', oldPath);
   }
@@ -567,6 +587,16 @@ html, body, #app {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   z-index: 1000;
+}
+
+/* Current Tab Heading */
+.current-tab-heading {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  padding: 0.25rem 1rem;
+  border-radius: 0.375rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
 }
 
 .exit-fullscreen-toolbar .dropdown-menu {

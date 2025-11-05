@@ -1,6 +1,7 @@
 const {
   getRecents,
   addToRecents,
+  updateRecent,
   clearRecents
 } = require('../database/recents-store');
 
@@ -44,6 +45,23 @@ async function handleAddToRecents(event, item) {
 }
 
 /**
+ * Update a recent
+ * IPC Handler: 'recents-store:update'
+ */
+async function handleUpdateRecent(event, updateData) {
+  try {
+    return updateRecent(updateData);
+  } catch (err) {
+    console.error('Error updating recent:', err);
+    return {
+      success: false,
+      error: 'Failed to update recent',
+      message: err.message
+    };
+  }
+}
+
+/**
  * Clear all recents
  * IPC Handler: 'recents-store:clear'
  */
@@ -63,5 +81,6 @@ async function handleClearRecents(event, params) {
 module.exports = {
   handleGetRecents,
   handleAddToRecents,
+  handleUpdateRecent,
   handleClearRecents
 };

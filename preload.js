@@ -94,6 +94,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDefaults: () => ipcRenderer.invoke('preferences-store:get-defaults')
   },
 
+  // Templates (database operations)
+  templates: {
+    updatePrices: (templateId, data) => ipcRenderer.invoke('templates:update-prices', data)
+  },
+
   // Templates Store (electron-store persistent storage)
   templatesStore: {
     getList: (params) => ipcRenderer.invoke('templates-store:get-list', params),
@@ -109,6 +114,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add: (item) => ipcRenderer.invoke('favourites-store:add', item),
     remove: (priceCode) => ipcRenderer.invoke('favourites-store:remove', { priceCode }),
     check: (priceCode) => ipcRenderer.invoke('favourites-store:check', { priceCode }),
+    update: (updateData) => ipcRenderer.invoke('favourites-store:update', updateData),
     clear: () => ipcRenderer.invoke('favourites-store:clear')
   },
 
@@ -116,6 +122,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recentsStore: {
     getList: (params) => ipcRenderer.invoke('recents-store:get-list', params),
     add: (item) => ipcRenderer.invoke('recents-store:add', item),
+    update: (updateData) => ipcRenderer.invoke('recents-store:update', updateData),
     clear: () => ipcRenderer.invoke('recents-store:clear')
   },
 
