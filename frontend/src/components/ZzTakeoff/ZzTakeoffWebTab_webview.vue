@@ -138,8 +138,11 @@
         ref="webviewRef"
         :src="homeUrl"
         class="webview-element"
+        style="width: 100%; height: 100%; display: inline-flex;"
         partition="persist:zztakeoff"
         allowpopups
+        nodeintegration="false"
+        webpreferences="contextIsolation=yes"
       ></webview>
 
       <!-- Grey overlay when dropdown is open -->
@@ -402,11 +405,14 @@ onUnmounted(() => {
 .webview-wrapper {
   position: relative;
   overflow: hidden;
+  min-height: 400px; /* Ensure minimum height */
 }
 
 .webview-element {
+  display: flex; /* Ensure webview is visible */
   width: 100%;
   height: 100%;
+  min-height: 400px; /* Match wrapper minimum */
   border: none;
 }
 
