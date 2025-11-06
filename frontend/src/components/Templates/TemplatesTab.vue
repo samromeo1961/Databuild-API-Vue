@@ -936,7 +936,7 @@ const columnDefs = ref([
       return `
         <div class="action-buttons d-flex gap-1 justify-content-center">
           <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
-            <i class="bi bi-send"></i>
+            <i class="bi bi-send" style="color: #000;"></i>
           </button>
           <button class="btn btn-sm btn-danger" data-action="delete" title="Delete Item">
             <i class="bi bi-trash"></i>
@@ -1543,8 +1543,19 @@ const handleUpdatePrices = async () => {
   success.value = null;
 
   try {
+    // Serialize items to ensure they can be cloned for IPC
+    const serializedItems = selectedTemplate.value.items.map(item => ({
+      PriceCode: String(item.PriceCode || ''),
+      description: String(item.description || ''),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      zzType: String(item.zzType || 'count'),
+      quantity: Number(item.quantity || 1)
+    }));
+
     const response = await api.templates.updatePrices(selectedTemplate.value.id, {
-      items: selectedTemplate.value.items
+      items: serializedItems
     });
 
     if (response?.success) {
@@ -2101,7 +2112,9 @@ const handleSendToZzTakeoff = async () => {
     await router.push('/zztakeoff-web');
 
     // Wait for the tab to load and webview to be ready
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
 
     // Send the first item (single item mode)
     const row = selectedRows.value[0];
@@ -2110,31 +2123,47 @@ const handleSendToZzTakeoff = async () => {
     const zzType = row.zzType || 'count';
     console.log(`[zzType] Using type for ${row.PriceCode}: ${zzType}`);
 
-    // Build the JavaScript code to execute in zzTakeoff.com
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
-      startTakeoffWithProperties({
-        type: ${JSON.stringify(zzType)},
-        properties: {
-          name: {
-            value: ${JSON.stringify(row.description || row.Description || '')}
-          },
-          sku: {
-            value: ${JSON.stringify(row.PriceCode || '')}
-          },
-          unit: {
-            value: ${JSON.stringify(row.Unit || '')}
-          },
-          'Cost Each': {
-            value: ${JSON.stringify(row.Price ? row.Price.toString() : '0')}
-          },
-          'cost centre': {
-            value: ${JSON.stringify(row.CostCentre || '')}
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
           }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(zzType)},
+            properties: {
+              name: {
+                value: ${JSON.stringify(row.description || row.Description || '')}
+              },
+              sku: {
+                value: ${JSON.stringify(row.PriceCode || '')}
+              },
+              unit: {
+                value: ${JSON.stringify(row.Unit || '')}
+              },
+              'Cost Each': {
+                value: ${JSON.stringify(row.Price ? row.Price.toString() : '0')}
+              },
+              'cost centre': {
+                value: ${JSON.stringify(row.CostCentre || '')}
+              }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
         }
-      });
+      })()
     `;
 
-    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
 
     // Execute the JavaScript in the BrowserView
     const result = await api.webview.executeJavaScript(jsCode);

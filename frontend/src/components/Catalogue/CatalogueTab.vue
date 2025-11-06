@@ -511,28 +511,6 @@ const columnDefs = ref([
     tooltipValueGetter: (params) => params.value
   },
   {
-    field: 'zzType',
-    headerName: 'zzType',
-    width: 100,
-    filter: 'agTextColumnFilter',
-    sortable: true,
-    editable: (params) => params.data.Unit !== 'HEADING',
-    cellEditor: 'agSelectCellEditor',
-    cellEditorParams: {
-      values: ['area', 'linear', 'segment', 'count']
-    },
-    valueFormatter: (params) => {
-      // Don't show for heading rows
-      if (params.data && params.data.Unit === 'HEADING') return '';
-      // Capitalize first letter for display
-      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : '';
-    },
-    tooltipValueGetter: (params) => {
-      if (params.data && params.data.Unit === 'HEADING') return null;
-      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : null;
-    }
-  },
-  {
     field: 'LatestPrice',
     headerName: 'Price',
     width: 120,
@@ -598,6 +576,28 @@ const columnDefs = ref([
     }
   },
   {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 100,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: (params) => params.data.Unit !== 'HEADING',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['area', 'linear', 'segment', 'count']
+    },
+    valueFormatter: (params) => {
+      // Don't show for heading rows
+      if (params.data && params.data.Unit === 'HEADING') return '';
+      // Capitalize first letter for display
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : '';
+    },
+    tooltipValueGetter: (params) => {
+      if (params.data && params.data.Unit === 'HEADING') return null;
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : null;
+    }
+  },
+  {
     field: 'actions',
     headerName: 'Actions',
     width: 200,
@@ -618,14 +618,14 @@ const columnDefs = ref([
 
       return `
         <div class="action-buttons d-flex gap-1">
+          <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
+            <i class="bi bi-send" style="color: #000;"></i>
+          </button>
           <button class="btn btn-sm btn-outline-primary" data-action="favourite" title="Add to Favourites">
             <i class="bi bi-star"></i>
           </button>
           <button class="btn btn-sm btn-outline-success" data-action="template" title="Add to Template">
             <i class="bi bi-plus-circle"></i>
-          </button>
-          <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
-            <i class="bi bi-send"></i>
           </button>
           ${archiveButton}
         </div>
@@ -1532,36 +1532,54 @@ const handleSendToZzTakeoff = async () => {
     await router.push('/zztakeoff-web');
 
     // Wait for the tab to load and webview to be ready
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
 
     // Send the first item (single item mode as requested)
     const row = selectedRows.value[0];
 
-    // Build the JavaScript code to execute in zzTakeoff.com
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
-      startTakeoffWithProperties({
-        type: ${JSON.stringify(row.zzType || 'count')},
-        properties: {
-          name: {
-            value: ${JSON.stringify(row.Description || '')}
-          },
-          sku: {
-            value: ${JSON.stringify(row.ItemCode || '')}
-          },
-          unit: {
-            value: ${JSON.stringify(row.Unit || '')}
-          },
-          'Cost Each': {
-            value: ${JSON.stringify(row.LatestPrice ? row.LatestPrice.toString() : '0')}
-          },
-          'cost centre': {
-            value: ${JSON.stringify(row.CostCentre || '')}
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
           }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(row.zzType || 'count')},
+            properties: {
+              name: {
+                value: ${JSON.stringify(row.Description || '')}
+              },
+              sku: {
+                value: ${JSON.stringify(row.ItemCode || '')}
+              },
+              unit: {
+                value: ${JSON.stringify(row.Unit || '')}
+              },
+              'Cost Each': {
+                value: ${JSON.stringify(row.LatestPrice ? row.LatestPrice.toString() : '0')}
+              },
+              'cost centre': {
+                value: ${JSON.stringify(row.CostCentre || '')}
+              }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
         }
-      });
+      })()
     `;
 
-    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
 
     // Execute the JavaScript in the BrowserView
     const result = await api.webview.executeJavaScript(jsCode);

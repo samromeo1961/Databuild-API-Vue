@@ -111,7 +111,7 @@
               :disabled="selectedRows.length === 0"
               title="Add Selected to Favourites"
             >
-              <i class="bi bi-star"></i>
+              <i class="bi bi-star" style="color: #0d6efd;"></i>
             </button>
             <button
               class="btn btn-outline-success"
@@ -119,15 +119,7 @@
               :disabled="selectedRows.length === 0"
               title="Add Selected to Template"
             >
-              <i class="bi bi-plus-circle"></i>
-            </button>
-            <button
-              class="btn btn-warning"
-              @click="handleSendToZzTakeoff"
-              :disabled="selectedRows.length === 0"
-              title="Send Selected to zzTakeoff"
-            >
-              <i class="bi bi-send"></i>
+              <i class="bi bi-plus-circle" style="color: #198754;"></i>
             </button>
             <button
               class="btn btn-outline-secondary"
@@ -188,6 +180,8 @@
         @column-resized="onColumnResized"
         @column-moved="onColumnMoved"
         @column-visible="onColumnVisible"
+        @cell-value-changed="onCellValueChanged"
+        @row-double-clicked="onRowDoubleClicked"
       />
       <!-- Custom footer info overlaid on AG Grid pagination -->
       <div class="custom-grid-footer">
@@ -397,6 +391,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, inject, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { Modal } from 'bootstrap';
 import { useElectronAPI } from '../../composables/useElectronAPI';
@@ -404,6 +399,7 @@ import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
 import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
+const router = useRouter();
 const theme = inject('theme');
 
 // State
@@ -475,20 +471,27 @@ const ExpandButtonRenderer = (params) => {
 const ActionsRenderer = (params) => {
   if (params.data.isChild) return '';
 
+  const isArchived = params.data.Archived === 1 || params.data.Archived === true;
+  const archiveButton = isArchived
+    ? `<button class="btn btn-sm btn-outline-secondary" data-action="unarchive" title="Unarchive Recipe">
+         <i class="bi bi-arrow-counterclockwise"></i>
+       </button>`
+    : `<button class="btn btn-sm btn-outline-secondary" data-action="archive" title="Archive Recipe">
+         <i class="bi bi-archive"></i>
+       </button>`;
+
   return `
-    <div class="btn-group btn-group-sm">
-      <button class="btn btn-sm btn-outline-secondary" data-action="edit" title="Edit Recipe Description">
-        <i class="bi bi-pencil"></i>
+    <div class="action-buttons d-flex gap-1">
+      <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
+        <i class="bi bi-send" style="color: #000;"></i>
       </button>
       <button class="btn btn-sm btn-outline-primary" data-action="favourite" title="Add to Favourites">
-        <i class="bi bi-star"></i>
+        <i class="bi bi-star" style="color: #0d6efd;"></i>
       </button>
       <button class="btn btn-sm btn-outline-success" data-action="template" title="Add to Template">
-        <i class="bi bi-plus-circle"></i>
+        <i class="bi bi-plus-circle" style="color: #198754;"></i>
       </button>
-      <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
-        <i class="bi bi-send"></i>
-      </button>
+      ${archiveButton}
     </div>
   `;
 };
@@ -531,6 +534,7 @@ const columnDefs = ref([
     minWidth: 300,
     filter: 'agTextColumnFilter',
     sortable: true,
+    editable: (params) => !params.data.isChild,
     tooltipValueGetter: (params) => params.value,
     cellStyle: (params) => {
       if (params.data.isChild) {
@@ -632,17 +636,60 @@ const columnDefs = ref([
     }
   },
   {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 100,
+    hide: false,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: (params) => !params.data.isChild && params.data.Unit !== 'HEADING',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['area', 'linear', 'segment', 'count']
+    },
+    valueFormatter: (params) => {
+      // Don't show for child rows or heading rows
+      if (params.data && (params.data.isChild || params.data.Unit === 'HEADING')) return '';
+      // Capitalize first letter for display
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : '';
+    },
+    tooltipValueGetter: (params) => {
+      if (params.data && (params.data.isChild || params.data.Unit === 'HEADING')) return null;
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : null;
+    }
+  },
+  {
     field: 'actions',
     headerName: 'Actions',
-    width: 150,
-    minWidth: 150,
+    width: 200,
+    minWidth: 200,
     pinned: 'right',
     cellRenderer: ActionsRenderer,
     suppressColumnsToolPanel: true,
     suppressMovable: true,
     sortable: false,
     filter: false,
-    resizable: true
+    resizable: true,
+    onCellClicked: (params) => {
+      const target = params.event.target;
+      const button = target.closest('button');
+
+      if (!button) return;
+
+      const action = button.getAttribute('data-action');
+
+      if (action === 'favourite' && !params.data.isChild) {
+        handleAddToFavourites(params.data);
+      } else if (action === 'template' && !params.data.isChild) {
+        handleAddSingleToTemplate(params.data);
+      } else if (action === 'zztakeoff' && !params.data.isChild) {
+        handleSendToZzTakeoff(params.data);
+      } else if (action === 'archive' && !params.data.isChild) {
+        handleArchiveRecipe(params.data);
+      } else if (action === 'unarchive' && !params.data.isChild) {
+        handleUnarchiveRecipe(params.data);
+      }
+    }
   }
 ]);
 
@@ -798,6 +845,55 @@ const onColumnMoved = (event) => {
 
 const onColumnVisible = () => {
   saveColumnState();
+};
+
+// Cell value changed handler (for inline editing)
+const onCellValueChanged = async (event) => {
+  const { data, colDef, newValue, oldValue } = event;
+  const field = colDef.field;
+
+  // Only handle zzType changes
+  if (field !== 'zzType' || newValue === oldValue) return;
+
+  try {
+    console.log('[zzType] Saving override:', data.PriceCode, '→', newValue.toLowerCase());
+
+    // Save zzType override to electron-store
+    const result = await api.zzTypeStore.set(data.PriceCode, newValue.toLowerCase());
+
+    if (result && result.success) {
+      success.value = 'zzType updated successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to update zzType';
+      setTimeout(() => error.value = null, 3000);
+      // Revert the change
+      data.zzType = oldValue;
+      gridApi.value.refreshCells({ rowNodes: [event.node], force: true });
+    }
+  } catch (err) {
+    console.error('Error updating zzType:', err);
+    error.value = 'Error updating zzType';
+    setTimeout(() => error.value = null, 3000);
+    // Revert the change
+    data.zzType = oldValue;
+    gridApi.value.refreshCells({ rowNodes: [event.node], force: true });
+  }
+};
+
+// Handle row double-click to edit Description
+const onRowDoubleClicked = (event) => {
+  // Don't allow editing of child rows (sub-items)
+  if (event.data.isChild) return;
+
+  // Start editing the Description column
+  const descriptionColumn = gridApi.value.getColumn('Description');
+  if (descriptionColumn) {
+    gridApi.value.startEditingCell({
+      rowIndex: event.rowIndex,
+      colKey: 'Description'
+    });
+  }
 };
 
 // Open column management modal
@@ -1012,7 +1108,35 @@ const loadData = async (resetPage = false) => {
     const response = await api.recipes.getList(params);
 
     if (response?.success) {
-      rowData.value = response.data.map(item => ({
+      const items = response.data || [];
+
+      // Load preferences for unit mappings and zzType overrides
+      const [prefsResult, zzTypesResult] = await Promise.all([
+        api.preferencesStore.get(),
+        api.zzTypeStore.getAll()
+      ]);
+
+      const unitMappings = prefsResult?.success ? prefsResult.data.unitTakeoffMappings : {};
+      const zzTypeOverrides = zzTypesResult?.success ? zzTypesResult.types : {};
+
+      console.log('[zzType] Unit mappings:', unitMappings);
+      console.log('[zzType] Overrides:', zzTypeOverrides);
+
+      // Resolve zzType for each recipe
+      items.forEach(item => {
+        // Resolution priority: 1. Override, 2. Unit mapping, 3. Default to 'count'
+        if (zzTypeOverrides[item.PriceCode]) {
+          item.zzType = zzTypeOverrides[item.PriceCode];
+          console.log(`[zzType] ${item.PriceCode}: Using override → ${item.zzType}`);
+        } else if (item.Unit && unitMappings[item.Unit]) {
+          item.zzType = unitMappings[item.Unit];
+          console.log(`[zzType] ${item.PriceCode}: Using unit mapping ${item.Unit} → ${item.zzType}`);
+        } else {
+          item.zzType = 'count'; // Default
+        }
+      });
+
+      rowData.value = items.map(item => ({
         PriceCode: item.PriceCode,
         Description: item.Description,
         Quantity: null, // Only for sub-items
@@ -1021,6 +1145,7 @@ const loadData = async (resetPage = false) => {
         CostCentre: item.CostCentre,
         CostCentreName: item.CostCentreName,
         SubGroup: item.SubGroup,
+        zzType: item.zzType,
         LatestPrice: item.LatestPrice,
         PriceDate: item.PriceDate,
         Template: item.Template
@@ -1396,11 +1521,136 @@ const handleAddToTemplate = (items = null) => {
   alert(`Add ${itemsToAdd.length} recipe(s) to template - functionality coming soon!`);
 };
 
+// Add single item to Template
+const handleAddSingleToTemplate = async (item) => {
+  // Wrap single item in array and call handleAddToTemplate
+  handleAddToTemplate([item]);
+};
+
+// Archive recipe
+const handleArchiveRecipe = async (item) => {
+  try {
+    const result = await api.recipes.archiveRecipe({
+      priceCode: item.PriceCode,
+      archived: true
+    });
+
+    if (result.success) {
+      success.value = `Recipe "${item.Description}" has been archived`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Reload data to reflect the change
+      await loadData();
+    } else {
+      error.value = result.message || 'Failed to archive recipe';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error archiving recipe:', err);
+    error.value = 'Failed to archive recipe';
+    setTimeout(() => error.value = null, 3000);
+  }
+};
+
+// Unarchive recipe
+const handleUnarchiveRecipe = async (item) => {
+  try {
+    const result = await api.recipes.archiveRecipe({
+      priceCode: item.PriceCode,
+      archived: false
+    });
+
+    if (result.success) {
+      success.value = `Recipe "${item.Description}" has been unarchived`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Reload data to reflect the change
+      await loadData();
+    } else {
+      error.value = result.message || 'Failed to unarchive recipe';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error unarchiving recipe:', err);
+    error.value = 'Failed to unarchive recipe';
+    setTimeout(() => error.value = null, 3000);
+  }
+};
+
 // Send to zzTakeoff
-const handleSendToZzTakeoff = (items = null) => {
-  const itemsToSend = items || selectedRows.value;
-  if (itemsToSend.length === 0) return;
-  alert(`Send ${itemsToSend.length} recipe(s) to zzTakeoff - functionality coming soon!`);
+const handleSendToZzTakeoff = async (item) => {
+  try {
+    console.log('[zzTakeoff] Sending recipe to zzTakeoff:', item);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
+
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
+    const jsCode = `
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
+          }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(item.zzType || 'count')},
+            properties: {
+              name: { value: ${JSON.stringify(item.Description || '')} },
+              sku: { value: ${JSON.stringify(item.PriceCode || '')} },
+              unit: { value: ${JSON.stringify(item.Unit || '')} },
+              'Cost Each': { value: ${JSON.stringify(item.LatestPrice ? item.LatestPrice.toString() : '0')} },
+              'cost centre': { value: ${JSON.stringify(item.CostCentre || '')} }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
+        }
+      })()
+    `;
+
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    if (result?.success) {
+      console.log('[zzTakeoff] Successfully sent recipe to zzTakeoff:', result.note);
+      success.value = `Recipe sent to zzTakeoff: ${item.PriceCode}`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Track in send history
+      try {
+        await api.sendHistory.add({
+          priceCode: item.PriceCode,
+          description: item.Description,
+          unit: item.Unit,
+          price: item.LatestPrice,
+          costCentre: item.CostCentre,
+          timestamp: new Date().toISOString()
+        });
+      } catch (historyError) {
+        console.error('Failed to save to send history:', historyError);
+      }
+    } else {
+      console.error('[zzTakeoff] Failed to send recipe:', result);
+      error.value = `Failed to send to zzTakeoff: ${result?.error || 'Unknown error'}`;
+      setTimeout(() => error.value = null, 5000);
+    }
+  } catch (err) {
+    console.error('[zzTakeoff] Error in handleSendToZzTakeoff:', err);
+    error.value = `Error sending to zzTakeoff: ${err.message}`;
+    setTimeout(() => error.value = null, 5000);
+  }
 };
 
 // Export to CSV

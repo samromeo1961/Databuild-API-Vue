@@ -397,6 +397,21 @@ const columnDefs = ref([
     sortable: true
   },
   {
+    field: 'DateAdded',
+    headerName: 'Date Added',
+    width: 150,
+    filter: 'agDateColumnFilter',
+    sortable: true,
+    valueFormatter: (params) => {
+      if (!params.value) return '-';
+      return new Date(params.value).toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+  },
+  {
     field: 'zzType',
     headerName: 'zzType',
     width: 150,
@@ -460,34 +475,34 @@ const columnDefs = ref([
     }
   },
   {
-    field: 'DateAdded',
-    headerName: 'Date Added',
-    width: 150,
-    filter: 'agDateColumnFilter',
-    sortable: true,
-    valueFormatter: (params) => {
-      if (!params.value) return '-';
-      return new Date(params.value).toLocaleDateString('en-AU', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    }
-  },
-  {
     field: 'actions',
     headerName: 'Actions',
-    width: 100,
+    width: 170,
+    minWidth: 170,
     pinned: 'right',
     cellRenderer: (params) => {
-      const button = document.createElement('button');
-      button.className = 'btn btn-sm btn-warning';
-      button.innerHTML = '<i class="bi bi-send"></i>';
-      button.title = 'Send to zzTakeoff';
-      button.addEventListener('click', () => {
+      return `
+        <div class="action-buttons d-flex gap-1 justify-content-center">
+          <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
+            <i class="bi bi-send" style="color: #000;"></i>
+          </button>
+          <button class="btn btn-sm btn-danger" data-action="delete" title="Remove from Favourites">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      `;
+    },
+    onCellClicked: (params) => {
+      const target = params.event.target;
+      const button = target.closest('button');
+      if (!button) return;
+
+      const action = button.getAttribute('data-action');
+      if (action === 'zztakeoff') {
         handleSendToZzTakeoff(params.data);
-      });
-      return button;
+      } else if (action === 'delete') {
+        handleDeleteFavourite(params.data);
+      }
     }
   }
 ]);
@@ -668,94 +683,49 @@ const handleSendToZzTakeoff = async (item) => {
     // Wait for the tab to load and webview to be ready
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Check if we need to navigate to the takeoff page
-    // Only navigate if NOT already on the takeoff page (e.g., if on Reports, Community, etc.)
-    console.log('[zzTakeoff] Checking current page...');
+    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
 
-    try {
-      // Get the current URL
-      const getCurrentUrlScript = `(function() { return window.location.href; })()`;
-      const currentUrlResult = await api.webview.executeJavaScript(getCurrentUrlScript);
-      const currentUrl = currentUrlResult?.result || '';
-
-      console.log('[zzTakeoff] Current URL:', currentUrl);
-
-      // Check if already on the takeoff page
-      const isOnTakeoffPage = currentUrl.includes('/app/takeoff');
-
-      if (!isOnTakeoffPage) {
-        // Not on takeoff page - need to navigate
-        console.log('[zzTakeoff] Not on takeoff page, navigating...');
-
-        // Parse URL to extract projectId and pageId
-        let projectId = '';
-        let pageId = '';
-
-        try {
-          const url = new URL(currentUrl);
-          projectId = url.searchParams.get('projectId') || '';
-          pageId = url.searchParams.get('pageId') || '';
-          console.log('[zzTakeoff] Extracted projectId:', projectId, 'pageId:', pageId);
-        } catch (parseError) {
-          console.warn('[zzTakeoff] Could not parse current URL:', parseError);
-        }
-
-        // Build takeoff URL with preserved project context
-        let takeoffUrl = 'https://www.zztakeoff.com/app/takeoff';
-        if (projectId) {
-          const params = new URLSearchParams();
-          params.append('projectId', projectId);
-          if (pageId) {
-            params.append('pageId', pageId);
-          }
-          takeoffUrl += '?' + params.toString();
-        }
-
-        console.log('[zzTakeoff] Navigating to takeoff page:', takeoffUrl);
-
-        // Navigate to the takeoff page with preserved project context
-        await api.webview.navigate(takeoffUrl);
-        console.log('[zzTakeoff] Navigation initiated to takeoff page');
-
-        // Wait for navigation and page load
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } else {
-        console.log('[zzTakeoff] Already on takeoff page, skipping navigation');
-        // Small delay to ensure page is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      console.log('[zzTakeoff] Ready to execute startTakeoffWithProperties');
-    } catch (navError) {
-      console.error('[zzTakeoff] Error checking/navigating to takeoff page:', navError);
-      throw new Error('Failed to navigate to zzTakeoff page: ' + navError.message);
-    }
-
-    // Build the JavaScript code to execute in zzTakeoff.com
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
-      startTakeoffWithProperties({
-        type: ${JSON.stringify(item.zzType || 'count')},
-        properties: {
-          name: {
-            value: ${JSON.stringify(item.Description || '')}
-          },
-          sku: {
-            value: ${JSON.stringify(item.PriceCode || '')}
-          },
-          unit: {
-            value: ${JSON.stringify(item.Unit || '')}
-          },
-          'Cost Each': {
-            value: ${JSON.stringify(item.Price ? item.Price.toString() : '0')}
-          },
-          'cost centre': {
-            value: ${JSON.stringify(item.CostCentre || '')}
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
           }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(item.zzType || 'count')},
+            properties: {
+              name: {
+                value: ${JSON.stringify(item.Description || '')}
+              },
+              sku: {
+                value: ${JSON.stringify(item.PriceCode || '')}
+              },
+              unit: {
+                value: ${JSON.stringify(item.Unit || '')}
+              },
+              'Cost Each': {
+                value: ${JSON.stringify(item.Price ? item.Price.toString() : '0')}
+              },
+              'cost centre': {
+                value: ${JSON.stringify(item.CostCentre || '')}
+              }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
         }
-      });
+      })()
     `;
 
-    console.log('[zzTakeoff] Executing JavaScript:', jsCode);
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
 
     // Execute the JavaScript in the BrowserView
     const result = await api.webview.executeJavaScript(jsCode);
@@ -786,6 +756,30 @@ const handleSendToZzTakeoff = async (item) => {
   } catch (err) {
     console.error('Error sending to zzTakeoff:', err);
     error.value = `Failed to send items to zzTakeoff: ${err.message}`;
+  }
+};
+
+// Delete from favourites
+const handleDeleteFavourite = async (item) => {
+  if (!item) return;
+
+  try {
+    const result = await api.favouritesStore.removeFavourite(item.PriceCode);
+
+    if (result.success) {
+      success.value = `Removed "${item.Description}" from Favourites`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Reload data to reflect the change
+      await loadData();
+    } else {
+      error.value = result.message || 'Failed to remove from favourites';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error removing from favourites:', err);
+    error.value = 'Failed to remove from favourites';
+    setTimeout(() => error.value = null, 3000);
   }
 };
 
