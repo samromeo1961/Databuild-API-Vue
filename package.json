@@ -1,12 +1,14 @@
 {
   "name": "dbx-connector-vue",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "DBx Connector for zzTakeoff - Vue.js + AG Grid Electron Edition",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "dev:chrome": "start \"\" \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --user-data-dir=\"%TEMP%\\chrome-debug\" --new-window http://localhost:5173 && timeout /t 2 /nobreak >nul && electron . --dev",
     "dev:frontend": "cd frontend && npm run dev",
+    "launch-chrome": "cmd /c launch-chrome-debug.bat",
     "build-frontend": "cd frontend && npm run build",
     "build": "npm run build-frontend && electron-builder build --win --publish never",
     "dist": "npm run build-frontend && electron-builder --win"
