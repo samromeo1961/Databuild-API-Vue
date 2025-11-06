@@ -103,6 +103,7 @@
         @grid-ready="onGridReady"
         @selection-changed="onSelectionChanged"
         @pagination-changed="onPaginationChanged"
+        @cell-value-changed="onCellValueChanged"
       />
       <!-- Custom footer info overlaid on AG Grid pagination -->
       <div class="custom-grid-footer">
@@ -127,10 +128,12 @@
 <script setup>
 import { ref, computed, onMounted, watch, inject, nextTick } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
+import { useRouter } from 'vue-router';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
 
 const api = useElectronAPI();
+const router = useRouter();
 const theme = inject('theme');
 
 // State
@@ -308,6 +311,73 @@ const columnDefs = ref([
     width: 120,
     filter: 'agTextColumnFilter',
     sortable: true
+  },
+  {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 100,
+    hide: false,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: (params) => !params.data.isChild && params.data.Unit !== 'HEADING',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['area', 'linear', 'segment', 'count']
+    },
+    valueFormatter: (params) => {
+      // Don't show for child rows or heading rows
+      if (params.data && (params.data.isChild || params.data.Unit === 'HEADING')) return '';
+      // Capitalize first letter for display
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : '';
+    },
+    tooltipValueGetter: (params) => {
+      if (params.data && (params.data.isChild || params.data.Unit === 'HEADING')) return null;
+      return params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : null;
+    }
+  },
+  {
+    colId: 'actions',
+    headerName: 'Actions',
+    width: 200,
+    pinned: 'right',
+    lockPosition: true,
+    suppressMovable: true,
+    cellRenderer: (params) => {
+      // Only show actions for parent recipes, not sub-items
+      if (params.data.isChild) {
+        return '';
+      }
+
+      return `
+        <div class="action-buttons d-flex gap-1">
+          <button class="btn btn-sm btn-outline-primary" data-action="favourite" title="Add to Favourites">
+            <i class="bi bi-star"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-success" data-action="template" title="Add to Template">
+            <i class="bi bi-plus-circle"></i>
+          </button>
+          <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
+            <i class="bi bi-send"></i>
+          </button>
+        </div>
+      `;
+    },
+    onCellClicked: (params) => {
+      const target = params.event.target;
+      const button = target.closest('button');
+
+      if (!button) return;
+
+      const action = button.getAttribute('data-action');
+
+      if (action === 'favourite' && !params.data.isChild) {
+        handleAddToFavourites(params.data);
+      } else if (action === 'template' && !params.data.isChild) {
+        handleAddSingleToTemplate(params.data);
+      } else if (action === 'zztakeoff' && !params.data.isChild) {
+        handleSendToZzTakeoff(params.data);
+      }
+    }
   }
 ]);
 
@@ -443,6 +513,40 @@ const toggleExpand = async (recipeCode) => {
 // Debounce timer
 let searchDebounce = null;
 
+// Cell value changed handler (for inline editing)
+const onCellValueChanged = async (event) => {
+  const { data, colDef, newValue, oldValue } = event;
+  const field = colDef.field;
+
+  // Only handle zzType changes
+  if (field !== 'zzType' || newValue === oldValue) return;
+
+  try {
+    console.log('[zzType] Saving override:', data.RecipeCode, '→', newValue.toLowerCase());
+
+    // Save zzType override to electron-store
+    const result = await api.zzTypeStore.set(data.RecipeCode, newValue.toLowerCase());
+
+    if (result && result.success) {
+      success.value = 'zzType updated successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to update zzType';
+      setTimeout(() => error.value = null, 3000);
+      // Revert the change
+      data.zzType = oldValue;
+      gridApi.value.refreshCells({ rowNodes: [event.node], force: true });
+    }
+  } catch (err) {
+    console.error('Error updating zzType:', err);
+    error.value = 'Error updating zzType';
+    setTimeout(() => error.value = null, 3000);
+    // Revert the change
+    data.zzType = oldValue;
+    gridApi.value.refreshCells({ rowNodes: [event.node], force: true });
+  }
+};
+
 // Load data
 const loadData = async (resetPage = false) => {
   loading.value = true;
@@ -475,13 +579,42 @@ const loadData = async (resetPage = false) => {
     const response = await api.recipes.getList(params);
 
     if (response?.success) {
-      rowData.value = response.data.map(item => ({
+      const items = response.data || [];
+
+      // Load preferences for unit mappings and zzType overrides
+      const [prefsResult, zzTypesResult] = await Promise.all([
+        api.preferencesStore.get(),
+        api.zzTypeStore.getAll()
+      ]);
+
+      const unitMappings = prefsResult?.success ? prefsResult.data.unitTakeoffMappings : {};
+      const zzTypeOverrides = zzTypesResult?.success ? zzTypesResult.types : {};
+
+      console.log('[zzType] Unit mappings:', unitMappings);
+      console.log('[zzType] Overrides:', zzTypeOverrides);
+
+      // Resolve zzType for each recipe
+      items.forEach(item => {
+        // Resolution priority: 1. Override, 2. Unit mapping, 3. Default to 'count'
+        if (zzTypeOverrides[item.PriceCode]) {
+          item.zzType = zzTypeOverrides[item.PriceCode];
+          console.log(`[zzType] ${item.PriceCode}: Using override → ${item.zzType}`);
+        } else if (item.Unit && unitMappings[item.Unit]) {
+          item.zzType = unitMappings[item.Unit];
+          console.log(`[zzType] ${item.PriceCode}: Using unit mapping ${item.Unit} → ${item.zzType}`);
+        } else {
+          item.zzType = 'count'; // Default
+        }
+      });
+
+      rowData.value = items.map(item => ({
         RecipeCode: item.PriceCode,
         Description: item.Description,
         Unit: item.Unit,
         Price: item.Price,
         CostCentre: item.CostCentre,
-        SupplierCode: item.SupplierCode
+        SupplierCode: item.SupplierCode,
+        zzType: item.zzType
       }));
       totalSize.value = response.total || response.data.length;
       filteredCount.value = totalSize.value; // Initialize to total
@@ -563,6 +696,14 @@ const onPaginationChanged = () => {
 // Grid ready handler
 const onGridReady = (params) => {
   gridApi.value = params.api;
+
+  // Force show zzType column (in case saved column state is hiding it)
+  const zzTypeCol = gridApi.value.getColumn('zzType');
+  if (zzTypeCol) {
+    gridApi.value.setColumnsVisible(['zzType'], true);
+    console.log('[zzType] Column forced visible');
+  }
+
   loadCostCentres();
   loadData();
 };
@@ -655,6 +796,120 @@ const handleExportToExcel = () => {
     });
     success.value = 'Exported to CSV';
     setTimeout(() => success.value = null, 3000);
+  }
+};
+
+// Add to Favourites
+const handleAddToFavourites = async (item) => {
+  try {
+    const result = await api.favourites.add({
+      priceCode: item.RecipeCode,
+      description: item.Description,
+      unit: item.Unit,
+      price: item.Price,
+      costCentre: item.CostCentre
+    });
+
+    if (result?.success) {
+      success.value = `${item.RecipeCode} added to Favourites`;
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to add to Favourites';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error adding to favourites:', err);
+    error.value = 'Error adding to Favourites';
+    setTimeout(() => error.value = null, 3000);
+  }
+};
+
+// Add single item to Template
+const handleAddSingleToTemplate = async (item) => {
+  // Add the single item to selectedRows temporarily
+  const originalSelection = [...selectedRows.value];
+  selectedRows.value = [item];
+
+  // Call the existing template handler
+  await handleAddToTemplate();
+
+  // Restore original selection
+  selectedRows.value = originalSelection;
+};
+
+// Send to zzTakeoff
+const handleSendToZzTakeoff = async (item) => {
+  try {
+    console.log('[zzTakeoff] Sending recipe to zzTakeoff:', item);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
+
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
+    const jsCode = `
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
+          }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(item.zzType || 'count')},
+            properties: {
+              name: { value: ${JSON.stringify(item.Description || '')} },
+              sku: { value: ${JSON.stringify(item.RecipeCode || '')} },
+              unit: { value: ${JSON.stringify(item.Unit || '')} },
+              'Cost Each': { value: ${JSON.stringify(item.Price ? item.Price.toString() : '0')} },
+              'cost centre': { value: ${JSON.stringify(item.CostCentre || '')} }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
+        }
+      })()
+    `;
+
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    if (result?.success) {
+      console.log('[zzTakeoff] Successfully sent recipe to zzTakeoff:', result.note);
+      success.value = `Recipe sent to zzTakeoff: ${item.RecipeCode}`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Track in send history
+      try {
+        await api.sendHistory.add({
+          priceCode: item.RecipeCode,
+          description: item.Description,
+          unit: item.Unit,
+          price: item.Price,
+          costCentre: item.CostCentre,
+          timestamp: new Date().toISOString()
+        });
+      } catch (historyError) {
+        console.error('Failed to save to send history:', historyError);
+      }
+    } else {
+      console.error('[zzTakeoff] Failed to send recipe:', result);
+      error.value = `Failed to send to zzTakeoff: ${result?.error || 'Unknown error'}`;
+      setTimeout(() => error.value = null, 5000);
+    }
+  } catch (err) {
+    console.error('[zzTakeoff] Error in handleSendToZzTakeoff:', err);
+    error.value = `Error sending to zzTakeoff: ${err.message}`;
+    setTimeout(() => error.value = null, 5000);
   }
 };
 

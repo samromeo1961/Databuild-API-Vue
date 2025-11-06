@@ -254,8 +254,9 @@ function createMainWindow() {
     console.log('Loading from production build:', startUrl);
   }
 
-  // Always open DevTools for debugging
-  mainWindow.webContents.openDevTools();
+  // TEMPORARILY DISABLED: Open DevTools in detached mode for debugging (separate window)
+  // Testing if DevTools interferes with BrowserView in production
+  // mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   console.log('Attempting to load URL:', startUrl);
   mainWindow.loadURL(startUrl);
@@ -519,11 +520,15 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
       }
       webView.webContents.focus();
 
+      // Explicitly set as top BrowserView
+      mainWindow.setTopBrowserView(webView);
+
       console.log('BrowserView restored with bounds:', bounds);
       console.log('BrowserView visible:', !webView.webContents.isOffscreen());
       console.log('BrowserView actual bounds:', webView.getBounds());
       console.log('MainWindow bounds:', mainWindow.getBounds());
       console.log('BrowserViews count:', mainWindow.getBrowserViews().length);
+      console.log('Set as top BrowserView');
       return { success: true, url: webView.webContents.getURL(), restored: true };
     }
 
@@ -539,9 +544,13 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
         sandbox: true,
         partition: 'persist:zztakeoff', // Persistent session storage
         webSecurity: true,
-        enableRemoteModule: false
+        enableRemoteModule: false,
+        backgroundThrottling: false
       }
     });
+
+    // Set background color to white to ensure visibility
+    webView.setBackgroundColor('#ffffff');
 
     mainWindow.addBrowserView(webView);
     webView.setBounds(bounds);
@@ -565,7 +574,12 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     mainWindow.addBrowserView(webView);
     webView.setBounds(bounds);
 
-    console.log('BrowserView re-added to ensure visibility');
+    // Explicitly set as top BrowserView
+    mainWindow.setTopBrowserView(webView);
+
+    console.log('BrowserView re-added and set as top view');
+    console.log('Final BrowserView bounds:', webView.getBounds());
+    console.log('BrowserViews in window after setup:', mainWindow.getBrowserViews().map(bv => bv.webContents.id));
 
     // Send navigation events back to renderer
     webView.webContents.on('did-start-loading', () => {
@@ -652,14 +666,19 @@ ipcMain.handle('webview:destroy', async (event) => {
 
 ipcMain.handle('webview:set-bounds', async (event, bounds) => {
   try {
+    console.log('[Main] webview:set-bounds called with:', bounds);
     if (!webView) {
+      console.error('[Main] webview:set-bounds failed: Webview not initialized');
       return { success: false, message: 'Webview not initialized' };
     }
 
+    console.log('[Main] Current BrowserView bounds before update:', webView.getBounds());
     webView.setBounds(bounds);
+    console.log('[Main] BrowserView bounds after update:', webView.getBounds());
+    console.log('[Main] BrowserView is visible:', mainWindow.getBrowserViews().includes(webView));
     return { success: true };
   } catch (error) {
-    console.error('Error setting BrowserView bounds:', error);
+    console.error('[Main] Error setting BrowserView bounds:', error);
     return { success: false, message: error.message };
   }
 });

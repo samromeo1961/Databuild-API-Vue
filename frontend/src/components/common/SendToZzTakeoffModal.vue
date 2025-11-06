@@ -282,9 +282,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { Modal } from 'bootstrap';
+import { useRouter } from 'vue-router';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 
 const api = useElectronAPI();
+const router = useRouter();
 
 const props = defineProps({
   items: {
@@ -483,6 +485,52 @@ const sendToZzTakeoff = async () => {
     };
 
     console.log('[zzTakeoff] Items ready for startTakeoffWithProperties:', JSON.stringify(zzTakeoffItems, null, 2));
+
+    // Navigate to zzTakeoff Web tab and execute Router.go() to open Takeoff tab
+    try {
+      // Navigate to zzTakeoff Web tab
+      await router.push('/zztakeoff-web');
+
+      // Wait a moment for the BrowserView to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Execute zzTakeoff developer's code to navigate to Takeoff tab
+      if (api.webview && api.webview.executeJavaScript) {
+        const result = await api.webview.executeJavaScript(`
+          (function() {
+            try {
+              // Check if Router and appLayout are available
+              if (typeof Router === 'undefined') {
+                return { success: false, error: 'Router is not defined' };
+              }
+              if (typeof appLayout === 'undefined') {
+                return { success: false, error: 'appLayout is not defined' };
+              }
+
+              // Execute zzTakeoff's navigation code
+              const takeoffUrl = appLayout.getAppUrl('takeoff');
+              console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+              Router.go(takeoffUrl);
+
+              return { success: true, url: takeoffUrl };
+            } catch (error) {
+              return { success: false, error: error.message, stack: error.stack };
+            }
+          })()
+        `);
+
+        console.log('[zzTakeoff] Router.go() execution result:', result);
+
+        if (result && result.success) {
+          console.log('[zzTakeoff] Successfully navigated to Takeoff tab:', result.url);
+        } else {
+          console.error('[zzTakeoff] Failed to navigate to Takeoff tab:', result?.error);
+        }
+      }
+    } catch (error) {
+      console.error('[zzTakeoff] Error navigating to Takeoff tab:', error);
+      // Don't fail the whole send operation if navigation fails
+    }
 
     emit('sent', payload);
   } catch (err) {

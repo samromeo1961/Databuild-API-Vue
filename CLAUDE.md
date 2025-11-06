@@ -21,6 +21,24 @@ npm run dev
 ```
 Starts Electron app in dev mode. The frontend Vite dev server runs on `http://localhost:5173` and automatically opens DevTools.
 
+### Start Development with Chrome DevTools MCP
+```bash
+npm run dev:chrome
+```
+Starts the Electron app AND launches Chrome in remote debugging mode on port 9222. This enables Claude Code to connect via Chrome DevTools MCP for live debugging, inspection, and interaction with the running application.
+
+**What it does:**
+1. Launches Chrome with `--remote-debugging-port=9222` flag
+2. Opens `http://localhost:5173` in Chrome
+3. Starts the Electron app in dev mode
+4. Enables Claude Code to inspect pages, run scripts, take snapshots, etc.
+
+### Launch Chrome Debug Mode Only
+```bash
+npm run launch-chrome
+```
+Only launches Chrome in debug mode without starting the Electron app. Useful if you already have the dev server running and just need to connect Chrome DevTools MCP.
+
 ### Start Frontend Dev Server Only
 ```bash
 npm run dev:frontend

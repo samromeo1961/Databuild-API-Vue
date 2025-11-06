@@ -1,0 +1,9 @@
+In Preferences add the Following:
+
+Open application in Expanded Mode
+
+What Tab you want to be the default Tab when Opening
+
+Sign in to zzTakeoff.com to persist between sessions
+
+A method to Bulk Import Templates either a CSV import or a Copy and Paste into the Gride from and External Spread sheet

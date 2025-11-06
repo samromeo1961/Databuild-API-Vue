@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-chrome-devtools"
+      ],
+      "env": {
+        "CHROME_REMOTE_DEBUGGING_URL": "http://localhost:9222"
+      }
+    }
+  }
+}

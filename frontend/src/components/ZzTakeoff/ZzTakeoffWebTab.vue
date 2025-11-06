@@ -318,11 +318,16 @@ const createWebView = async () => {
       return;
     }
 
-    console.log('Creating BrowserView with bounds:', bounds);
+    console.log('Creating BrowserView with bounds:', JSON.stringify(bounds));
+    console.log('Window dimensions:', {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio
+    });
     const result = await api.webview.create(currentUrl.value, bounds);
 
     if (result.success) {
-      console.log('BrowserView created successfully');
+      console.log('BrowserView created successfully:', JSON.stringify(result));
       isLoading.value = true;
     } else {
       hasError.value = true;
@@ -527,9 +532,12 @@ const handleFoundInPage = (result) => {
 };
 
 const toggleMaximize = () => {
+  console.log('[ToggleMaximize] Called, current isMaximized:', isMaximized.value);
   isMaximized.value = !isMaximized.value;
+  console.log('[ToggleMaximize] New isMaximized:', isMaximized.value);
   // Recalculate and update bounds after maximize state changes
   nextTick(() => {
+    console.log('[ToggleMaximize] nextTick callback, calling handleResize');
     handleResize();
   });
 };
@@ -555,17 +563,26 @@ const handleLoadError = (error) => {
 
 // Handle window resize
 const handleResize = () => {
+  console.log('[Resize] handleResize called');
   const bounds = calculateBounds();
+  console.log('[Resize] Calculated bounds:', JSON.stringify(bounds));
   if (bounds && api.webview) {
+    console.log('[Resize] Calling setBounds with:', JSON.stringify(bounds));
     api.webview.setBounds(bounds);
+    console.log('[Resize] setBounds called successfully');
+  } else {
+    console.warn('[Resize] Cannot set bounds - bounds or api.webview is null', { bounds, hasWebview: !!api.webview });
   }
 };
 
 // Watch for maximize state changes to update bounds
 watch(isMaximized, async () => {
+  console.log('[Maximize] isMaximized changed to:', isMaximized.value);
   // Wait for DOM to update, then recalculate bounds
   await nextTick();
+  console.log('[Maximize] After nextTick, scheduling handleResize in 100ms');
   setTimeout(() => {
+    console.log('[Maximize] Timeout fired, calling handleResize');
     handleResize();
   }, 100);
 });
@@ -610,14 +627,23 @@ onMounted(async () => {
     api.webview.onFoundInPage(handleFoundInPage);
   }
 
+  // TESTING: Add delay before creating BrowserView to allow window to fully render in production
+  console.log('Waiting 1 second before creating BrowserView...');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  console.log('Delay complete, creating BrowserView now');
+
   // Create BrowserView
   await createWebView();
 
-  // Auto-maximize webview if preference is enabled
-  if (shouldAutoMaximize) {
-    console.log('Auto-maximizing webview based on openExpanded preference');
-    toggleMaximize();
-  }
+  // TEMPORARILY DISABLED: Auto-maximize webview if preference is enabled and not already maximized
+  // Testing if BrowserView works in non-maximized mode
+  console.log('Auto-maximize temporarily disabled for testing');
+  // if (shouldAutoMaximize && !isMaximized.value) {
+  //   console.log('Auto-maximizing webview based on openExpanded preference');
+  //   toggleMaximize();
+  // } else if (isMaximized.value) {
+  //   console.log('Webview already maximized, keeping current state');
+  // }
 
   // Listen for window resize
   window.addEventListener('resize', handleResize);
@@ -630,13 +656,14 @@ onUnmounted(async () => {
   // Remove resize listener
   window.removeEventListener('resize', handleResize);
 
-  // Destroy BrowserView
+  // "Destroy" BrowserView (backend actually just hides it to preserve session)
+  // This allows Router.go() to be executed from other tabs when sending items
   if (api.webview) {
     try {
       await api.webview.destroy();
-      console.log('BrowserView destroyed');
+      console.log('BrowserView hidden (session preserved for Router.go() execution)');
     } catch (error) {
-      console.error('Error destroying BrowserView:', error);
+      console.error('Error hiding BrowserView:', error);
     }
   }
 });
@@ -666,8 +693,9 @@ onUnmounted(async () => {
 }
 
 .webview-container {
-  background-color: #ffffff;
+  background-color: transparent;
   min-height: 200px;
+  pointer-events: none;
 }
 
 /* Dropdown overlay */
@@ -694,7 +722,7 @@ onUnmounted(async () => {
 }
 
 [data-theme="dark"] .webview-container {
-  background-color: #1a1a1a;
+  background-color: transparent;
 }
 
 [data-theme="dark"] .alert-danger {
