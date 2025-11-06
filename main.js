@@ -1,6 +1,7 @@
 const { app, BrowserWindow, BrowserView, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
+const packageJson = require('./package.json');
 
 // Import database connection modules
 const db = require('./src/database/connection');
@@ -72,7 +73,8 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true // Enable <webview> tag for zzTakeoff integration
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
   });
@@ -225,7 +227,7 @@ function createMainWindow() {
               type: 'info',
               title: 'About DBx Connector Vue',
               message: 'DBx Connector Vue',
-              detail: 'Version: 1.0.2\nVue.js + AG Grid Edition\n\n© 2025 Takeoff and Estimating Pty Ltd'
+              detail: `Version: ${packageJson.version}\nVue.js + AG Grid Edition\n\n© 2025 Takeoff and Estimating Pty Ltd`
             });
           }
         }

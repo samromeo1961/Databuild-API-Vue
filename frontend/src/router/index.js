@@ -8,7 +8,7 @@ import ContactsTab from '../components/Contacts/ContactsTab.vue';
 import TemplatesTab from '../components/Templates/TemplatesTab.vue';
 import FavouritesTab from '../components/Favourites/FavouritesTab.vue';
 import RecentsTab from '../components/Recents/RecentsTab.vue';
-import ZzTakeoffWebTab from '../components/ZzTakeoff/ZzTakeoffWebTab.vue';
+import ZzTakeoffWebTab from '../components/ZzTakeoff/ZzTakeoffWebTab_webview.vue';
 
 const routes = [
   {

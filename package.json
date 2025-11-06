@@ -1,6 +1,6 @@
 {
   "name": "dbx-connector-vue",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "DBx Connector for zzTakeoff - Vue.js + AG Grid Electron Edition",
   "main": "main.js",
   "scripts": {

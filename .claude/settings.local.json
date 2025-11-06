@@ -64,7 +64,9 @@
       "Bash(cmd /c \"if exist frontend\\node_modules\\.vite rmdir /s /q frontend\\node_modules\\.vite\")",
       "Bash(cmd /c \"type C:\\Users\\User\\AppData\\Roaming\\dbx-connector-vue\\column-states.json\")",
       "Bash(cmd /c \"dir /b dist\\*.exe\")",
-      "Bash(cmd /c \"del /Q dist\\*.exe 2>nul & del /Q dist\\*.blockmap 2>nul\")"
+      "Bash(cmd /c \"del /Q dist\\*.exe 2>nul & del /Q dist\\*.blockmap 2>nul\")",
+      "Bash(cmd /c \"taskkill /F /IM electron.exe 2>nul & taskkill /F /IM node.exe 2>nul & timeout /t 2 /nobreak\")",
+      "Bash(cmd /c \"taskkill /F /IM electron.exe 2>nul & taskkill /F /IM node.exe 2>nul & timeout /t 3 /nobreak\")"
     ],
     "deny": [],
     "ask": []
