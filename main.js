@@ -541,7 +541,7 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true,
+        sandbox: false, // CRITICAL: Disable sandbox to fix rendering in packaged apps
         partition: 'persist:zztakeoff', // Persistent session storage
         webSecurity: true,
         enableRemoteModule: false,
