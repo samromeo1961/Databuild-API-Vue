@@ -488,11 +488,17 @@ const sendToZzTakeoff = async () => {
 
     // Navigate to zzTakeoff Web tab and execute Router.go() to open Takeoff tab
     try {
-      // Navigate to zzTakeoff Web tab
-      await router.push('/zztakeoff-web');
-
-      // Wait a moment for the BrowserView to be ready
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Only navigate if not already on the zzTakeoff tab (to preserve maximized state)
+      if (router.currentRoute.value.path !== '/zztakeoff-web') {
+        console.log('[zzTakeoff] Navigating to zzTakeoff Web tab...');
+        await router.push('/zztakeoff-web');
+        // Wait a moment for the BrowserView to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.log('[zzTakeoff] Already on zzTakeoff Web tab, preserving maximized state');
+        // Just a short delay to ensure modal has closed
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
       // Execute zzTakeoff developer's code to navigate to Takeoff tab
       if (api.webview && api.webview.executeJavaScript) {

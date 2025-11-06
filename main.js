@@ -3,6 +3,14 @@ const path = require('path');
 const Store = require('electron-store');
 const packageJson = require('./package.json');
 
+// Disable hardware acceleration to fix GPU/rendering issues
+app.disableHardwareAcceleration();
+
+// Disable disk cache to fix Windows permissions errors
+app.commandLine.appendSwitch('disk-cache-size', '0');
+app.commandLine.appendSwitch('disable-http-cache');
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
 // Import database connection modules
 const db = require('./src/database/connection');
 const localDb = require('./src/database/local-db');
@@ -762,6 +770,7 @@ ipcMain.handle('webview:execute-javascript', async (event, code) => {
     return { success: false, message: error.message };
   }
 });
+
 
 // ============================================================
 // App Lifecycle
