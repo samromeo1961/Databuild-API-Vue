@@ -248,12 +248,14 @@ function createMainWindow() {
     // Development mode - Vite dev server runs on port 5173
     startUrl = 'http://localhost:5173';
     console.log('Loading from Vite dev server:', startUrl);
-    mainWindow.webContents.openDevTools();
   } else {
     // Production mode - load built files from dist
     startUrl = `file://${path.join(__dirname, 'frontend/dist/index.html')}`;
     console.log('Loading from production build:', startUrl);
   }
+
+  // Always open DevTools for debugging
+  mainWindow.webContents.openDevTools();
 
   console.log('Attempting to load URL:', startUrl);
   mainWindow.loadURL(startUrl);
