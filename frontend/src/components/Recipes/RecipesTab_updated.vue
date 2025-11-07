@@ -181,6 +181,7 @@
         @column-moved="onColumnMoved"
         @column-visible="onColumnVisible"
         @cell-value-changed="onCellValueChanged"
+        @cell-clicked="onCellClicked"
         @row-double-clicked="onRowDoubleClicked"
       />
       <!-- Custom footer info overlaid on AG Grid pagination -->
@@ -698,7 +699,8 @@ const defaultColDef = {
   resizable: true,
   sortable: false,
   filter: false,
-  floatingFilter: false
+  floatingFilter: false,
+  singleClickEdit: true  // Enable single-click editing for better UX
 };
 
 // Display data with expanded sub-items
@@ -1288,6 +1290,23 @@ const onGridReady = (params) => {
 const onSelectionChanged = () => {
   if (gridApi.value) {
     selectedRows.value = gridApi.value.getSelectedRows().filter(row => !row.isChild);
+  }
+};
+
+const onCellClicked = (event) => {
+  console.log('[zzType] Cell clicked:', {
+    column: event.column.getColId(),
+    data: event.data,
+    value: event.value
+  });
+
+  // For zzType column, try to start editing manually
+  if (event.column.getColId() === 'zzType') {
+    console.log('[zzType] Attempting to start editing...');
+    gridApi.value.startEditingCell({
+      rowIndex: event.rowIndex,
+      colKey: 'zzType'
+    });
   }
 };
 

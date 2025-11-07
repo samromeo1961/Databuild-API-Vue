@@ -3,6 +3,10 @@ const path = require('path');
 const Store = require('electron-store');
 const packageJson = require('./package.json');
 
+// ============================================================
+// Electron Configuration & Diagnostics
+// ============================================================
+
 // Disable hardware acceleration to fix GPU/rendering issues
 app.disableHardwareAcceleration();
 
@@ -10,6 +14,24 @@ app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disk-cache-size', '0');
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
+// Enable verbose logging for diagnostics (production & development)
+app.commandLine.appendSwitch('enable-logging');
+app.commandLine.appendSwitch('v', '1'); // Verbose level 1
+
+console.log('============================================================');
+console.log('ELECTRON DIAGNOSTICS - STARTUP');
+console.log('============================================================');
+console.log('Electron Version:', process.versions.electron);
+console.log('Chrome Version:', process.versions.chrome);
+console.log('Node Version:', process.versions.node);
+console.log('App Version:', packageJson.version);
+console.log('Is Packaged:', app.isPackaged);
+console.log('App Path:', app.getAppPath());
+console.log('User Data Path:', app.getPath('userData'));
+console.log('Platform:', process.platform);
+console.log('Architecture:', process.arch);
+console.log('============================================================');
 
 // Import database connection modules
 const db = require('./src/database/connection');
@@ -127,11 +149,30 @@ function createMainWindow() {
       label: 'View',
       submenu: [
         {
-          label: 'Toggle Developer Tools',
+          label: 'Toggle Developer Tools (Main Window)',
           accelerator: 'F12',
           click: () => {
             if (mainWindow) {
               mainWindow.webContents.toggleDevTools();
+            }
+          }
+        },
+        {
+          label: 'Toggle Developer Tools (BrowserView)',
+          accelerator: 'Ctrl+Shift+I',
+          click: () => {
+            if (webView && webView.webContents) {
+              if (webView.webContents.isDevToolsOpened()) {
+                webView.webContents.closeDevTools();
+              } else {
+                webView.webContents.openDevTools({ mode: 'detach' });
+              }
+            } else {
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'BrowserView Not Available',
+                message: 'BrowserView has not been created yet. Please navigate to the zzTakeoff Web tab first.'
+              });
             }
           }
         }
@@ -543,11 +584,14 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     }
 
     // Create new BrowserView with persistent session (first time only)
+    console.log('============================================================');
+    console.log('BROWSERVIEW CREATION - DIAGNOSTICS');
+    console.log('============================================================');
     console.log('Creating new BrowserView with persistent session...');
     console.log('Received bounds from frontend:', bounds);
     console.log('MainWindow content bounds:', mainWindow.getContentBounds());
 
-    webView = new BrowserView({
+    const browserViewConfig = {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -557,7 +601,11 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
         enableRemoteModule: false,
         backgroundThrottling: false
       }
-    });
+    };
+
+    console.log('BrowserView webPreferences:', JSON.stringify(browserViewConfig.webPreferences, null, 2));
+
+    webView = new BrowserView(browserViewConfig);
 
     // Set background color to white to ensure visibility
     webView.setBackgroundColor('#ffffff');
@@ -590,25 +638,57 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     console.log('BrowserView re-added and set as top view');
     console.log('Final BrowserView bounds:', webView.getBounds());
     console.log('BrowserViews in window after setup:', mainWindow.getBrowserViews().map(bv => bv.webContents.id));
+    console.log('============================================================');
+    console.log('BROWSERVIEW CONFIGURATION SUMMARY');
+    console.log('============================================================');
+    console.log('WebContents ID:', webView.webContents.id);
+    console.log('Background Color:', '#ffffff');
+    console.log('Session Partition:', 'persist:zztakeoff');
+    console.log('Sandbox Enabled:', false);
+    console.log('Context Isolation:', true);
+    console.log('Node Integration:', false);
+    console.log('WebContents isOffscreen:', webView.webContents.isOffscreen());
+    console.log('WebContents isPainting:', webView.webContents.isPainting());
+    console.log('============================================================');
 
-    // Send navigation events back to renderer
+    // ============================================================
+    // BrowserView Diagnostic Logging & Event Forwarding
+    // ============================================================
+
+    // Forward console messages from BrowserView to main process console
+    webView.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      const levelMap = { 0: 'INFO', 1: 'WARN', 2: 'ERROR' };
+      const levelName = levelMap[level] || 'LOG';
+      console.log(`[BrowserView Console ${levelName}] ${message} (${sourceId}:${line})`);
+    });
+
+    // Lifecycle Events - Send navigation events back to renderer
     webView.webContents.on('did-start-loading', () => {
+      console.log('[BrowserView Lifecycle] did-start-loading');
       mainWindow.webContents.send('webview:loading', true);
     });
 
     webView.webContents.on('did-stop-loading', () => {
+      console.log('[BrowserView Lifecycle] did-stop-loading');
       mainWindow.webContents.send('webview:loading', false);
     });
 
     webView.webContents.on('did-navigate', (event, url) => {
+      console.log('[BrowserView Lifecycle] did-navigate to:', url);
       mainWindow.webContents.send('webview:url-changed', url);
     });
 
     webView.webContents.on('did-navigate-in-page', (event, url) => {
+      console.log('[BrowserView Lifecycle] did-navigate-in-page to:', url);
       mainWindow.webContents.send('webview:url-changed', url);
     });
 
     webView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('[BrowserView Lifecycle] did-fail-load:', {
+        errorCode,
+        errorDescription,
+        url: validatedURL
+      });
       mainWindow.webContents.send('webview:load-error', {
         errorCode,
         errorDescription,
@@ -616,10 +696,40 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
       });
     });
 
+    webView.webContents.on('did-finish-load', () => {
+      console.log('[BrowserView Lifecycle] did-finish-load');
+      console.log('[BrowserView Lifecycle] Current URL:', webView.webContents.getURL());
+      console.log('[BrowserView Lifecycle] Title:', webView.webContents.getTitle());
+    });
+
+    webView.webContents.on('dom-ready', () => {
+      console.log('[BrowserView Lifecycle] dom-ready');
+    });
+
+    webView.webContents.on('crashed', (event, killed) => {
+      console.error('[BrowserView Lifecycle] CRASHED! Killed:', killed);
+    });
+
+    webView.webContents.on('render-process-gone', (event, details) => {
+      console.error('[BrowserView Lifecycle] render-process-gone:', details);
+    });
+
+    webView.webContents.on('unresponsive', () => {
+      console.error('[BrowserView Lifecycle] unresponsive');
+    });
+
+    webView.webContents.on('responsive', () => {
+      console.log('[BrowserView Lifecycle] responsive');
+    });
+
     // Listen for find-in-page results
     webView.webContents.on('found-in-page', (event, result) => {
       mainWindow.webContents.send('webview:found-in-page', result);
     });
+
+    // Session diagnostics
+    console.log('[BrowserView Session] Partition:', webView.webContents.session.getUserAgent());
+    console.log('[BrowserView Session] Cache enabled:', !webView.webContents.session.getCacheSize);
 
     return { success: true, url };
   } catch (error) {

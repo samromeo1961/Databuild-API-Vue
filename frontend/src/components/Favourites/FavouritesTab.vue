@@ -300,6 +300,7 @@ import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
 const theme = inject('theme');
+const isMaximized = inject('webviewMaximized');
 const router = useRouter();
 
 // State
@@ -677,11 +678,18 @@ const handleSendToZzTakeoff = async (item) => {
   try {
     console.log('[zzTakeoff] Preparing to send item:', item);
 
-    // Navigate to zzTakeoff Web tab
-    await router.push('/zztakeoff-web');
+    // Navigate to zzTakeoff Web tab (only if not already there to preserve maximized state)
+    if (router.currentRoute.value.path !== '/zztakeoff-web') {
+      await router.push('/zztakeoff-web');
+      // Wait for the tab to load and webview to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } else {
+      // Just a short delay to ensure ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
 
-    // Wait for the tab to load and webview to be ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Maximize the webview after navigation
+    isMaximized.value = true;
 
     console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
 

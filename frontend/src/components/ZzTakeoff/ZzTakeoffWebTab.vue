@@ -613,10 +613,16 @@ onMounted(async () => {
   // Create BrowserView
   await createWebView();
 
-  // Auto-maximize webview if preference is enabled
-  if (shouldAutoMaximize) {
-    console.log('Auto-maximizing webview based on openExpanded preference');
-    toggleMaximize();
+  // Auto-maximize webview if preference is enabled OR if parent set maximize state
+  if (shouldAutoMaximize || isMaximized.value) {
+    console.log('Auto-maximizing webview based on:', shouldAutoMaximize ? 'openExpanded preference' : 'parent maximize state');
+    if (!isMaximized.value) {
+      toggleMaximize();
+    } else {
+      // If already set to true by parent (e.g., SendToZzTakeoffModal), just update bounds
+      await nextTick();
+      handleResize();
+    }
   }
 
   // Listen for window resize

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
 // Import tab components
-import CatalogueTab from '../components/Catalogue/CatalogueTab.vue';
+import CatalogueTab from '../components/Catalogue/CatalogueTab_updated.vue';
 import RecipesTab from '../components/Recipes/RecipesTab_updated.vue';
 import SuppliersTab from '../components/Suppliers/SuppliersTab.vue';
 import ContactsTab from '../components/Contacts/ContactsTab.vue';

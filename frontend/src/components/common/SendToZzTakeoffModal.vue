@@ -280,13 +280,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, inject } from 'vue';
 import { Modal } from 'bootstrap';
 import { useRouter } from 'vue-router';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 
 const api = useElectronAPI();
 const router = useRouter();
+const isMaximized = inject('webviewMaximized');
 
 const props = defineProps({
   items: {
@@ -499,6 +500,9 @@ const sendToZzTakeoff = async () => {
         // Just a short delay to ensure modal has closed
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      // Maximize the webview after navigation
+      isMaximized.value = true;
 
       // Execute zzTakeoff developer's code to navigate to Takeoff tab
       if (api.webview && api.webview.executeJavaScript) {
