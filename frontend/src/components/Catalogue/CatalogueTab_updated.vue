@@ -72,10 +72,11 @@
             <button
               class="btn btn-warning"
               @click="handleSendToZzTakeoff"
-              :disabled="selectedRows.length === 0"
+              :disabled="selectedRows.length === 0 || loading"
               title="Send to zzTakeoff"
             >
               <i class="bi bi-send"></i>
+              <span v-if="loading" class="spinner-border spinner-border-sm ms-1"></span>
             </button>
             <button
               class="btn btn-outline-secondary"
@@ -858,6 +859,14 @@ const handleSendToZzTakeoff = async () => {
     return;
   }
 
+  // Prevent multiple clicks
+  if (loading.value) {
+    console.log('[zzTakeoff] Already sending, please wait...');
+    return;
+  }
+
+  loading.value = true;
+
   try {
     // Send the first selected item (single item at a time)
     const item = selectedRows.value[0];
@@ -866,8 +875,9 @@ const handleSendToZzTakeoff = async () => {
     // Navigate to zzTakeoff Web tab
     await router.push('/zztakeoff-web');
 
-    // Wait for the tab to load and webview to be ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Wait longer for the tab to load and webview to be ready (increased from 1s to 2s)
+    console.log('[zzTakeoff] Waiting for webview to load...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties');
 
@@ -930,6 +940,8 @@ const handleSendToZzTakeoff = async () => {
     console.error('[zzTakeoff] Error in handleSendToZzTakeoff:', err);
     error.value = `Error sending to zzTakeoff: ${err.message}`;
     setTimeout(() => error.value = null, 5000);
+  } finally {
+    loading.value = false;
   }
 };
 
