@@ -627,16 +627,18 @@ onUnmounted(() => {
 .webview-container {
   background-color: #ffffff;
   min-height: 200px;
+  height: 100%;
   position: relative;
   overflow: hidden;
+  flex: 1 1 auto;
 }
 
 .webview-element {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: calc(100vh - 120px);
   min-height: 600px;
-  position: absolute;
-  top: 0;
+  position: fixed;
+  top: 120px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -644,6 +646,7 @@ onUnmounted(() => {
   border: none;
   outline: none;
   background-color: #fff;
+  z-index: 1;
 }
 
 /* Dropdown overlay */
@@ -654,7 +657,7 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 9998;
+  z-index: 10000;
   cursor: pointer;
 }
 
