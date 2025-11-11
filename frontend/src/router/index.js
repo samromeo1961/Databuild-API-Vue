@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory } from 'vue-router';
 
 // Use lazy loading for route components to enable code splitting
 // Each route will be loaded only when accessed, reducing initial bundle size
@@ -50,7 +50,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(), // Use hash mode for Electron file:// protocol
   routes
 });
 
