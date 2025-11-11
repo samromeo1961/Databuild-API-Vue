@@ -11,6 +11,11 @@ const packageJson = require('./package.json');
 // Disabling it causes ERR_ABORTED errors when loading external sites
 // app.disableHardwareAcceleration(); // DISABLED - breaks BrowserView
 
+// Enable GPU rasterization for better BrowserView performance
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
 // Disable disk cache to fix Windows permissions errors
 app.commandLine.appendSwitch('disk-cache-size', '0');
 app.commandLine.appendSwitch('disable-http-cache');
