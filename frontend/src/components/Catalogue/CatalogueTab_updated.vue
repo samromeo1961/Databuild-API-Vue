@@ -51,8 +51,8 @@
             @change="onFilterChange"
           />
         </div>
-        <div class="col-md-7">
-          <div class="d-flex justify-content-end align-items-center gap-3">
+        <div class="col-md-7" style="position: relative; z-index: 20;">
+          <div class="d-flex justify-content-end align-items-center gap-3" style="position: relative; z-index: 20;">
             <button
               class="btn btn-outline-primary"
               @click="handleAddToFavourites"
@@ -60,14 +60,6 @@
               title="Add to Favourites"
             >
               <i class="bi bi-star"></i>
-            </button>
-            <button
-              class="btn btn-outline-success"
-              @click="handleAddToTemplate"
-              :disabled="selectedRows.length === 0"
-              title="Add to Template"
-            >
-              <i class="bi bi-plus-circle"></i>
             </button>
             <button
               class="btn btn-warning"
@@ -78,6 +70,14 @@
             >
               <i v-if="!loading" class="bi bi-send"></i>
               <span v-if="loading" class="spinner-border spinner-border-sm"></span>
+            </button>
+            <button
+              class="btn btn-outline-success"
+              @click="handleAddToTemplate"
+              :disabled="selectedRows.length === 0"
+              title="Add to Template"
+            >
+              <i class="bi bi-plus-circle"></i>
             </button>
             <button
               class="btn btn-outline-secondary"
@@ -109,7 +109,7 @@
     </div>
 
     <!-- AG Grid -->
-    <div class="flex-grow-1 position-relative">
+    <div class="flex-grow-1 position-relative" style="z-index: 1;">
       <ag-grid-vue
         class="ag-theme-quartz h-100"
         :class="{ 'ag-theme-quartz-dark': isDarkMode }"
@@ -583,9 +583,22 @@ const onGridReady = (params) => {
 
   // Add click event listener for row actions
   params.api.addEventListener('cellClicked', (event) => {
-    if (event.event.target.dataset.action === 'template') {
+    // Check if clicked element or its parent has data-action attribute
+    let target = event.event.target;
+    let action = target.dataset.action;
+
+    // If target doesn't have action, check parent (for icon clicks)
+    if (!action && target.parentElement) {
+      action = target.parentElement.dataset.action;
+    }
+
+    console.log('[Actions] Cell clicked, target:', target, 'action:', action);
+
+    if (action === 'template') {
+      console.log('[Actions] Template button clicked');
       handleAddSingleItemToTemplate(event.data);
-    } else if (event.event.target.dataset.action === 'zztakeoff') {
+    } else if (action === 'zztakeoff') {
+      console.log('[Actions] zzTakeoff button clicked');
       handleSendSingleItemToZzTakeoff(event.data);
     }
   });
@@ -854,6 +867,8 @@ const handleAddSingleItemToTemplate = (item) => {
 };
 
 const handleSendToZzTakeoff = async () => {
+  console.log('[zzTakeoff] Button clicked! selectedRows:', selectedRows.value.length);
+
   if (selectedRows.value.length === 0) {
     error.value = 'Please select at least one item to send';
     setTimeout(() => error.value = null, 3000);
@@ -947,6 +962,7 @@ const handleSendToZzTakeoff = async () => {
 };
 
 const handleSendSingleItemToZzTakeoff = async (item) => {
+  console.log('[Actions] handleSendSingleItemToZzTakeoff called with item:', item);
   selectedRows.value = [item];
   await handleSendToZzTakeoff();
 };
