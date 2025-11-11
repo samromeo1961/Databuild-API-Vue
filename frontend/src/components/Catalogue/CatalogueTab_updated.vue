@@ -282,6 +282,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, inject } from 'vue';
+import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
@@ -289,6 +290,7 @@ import draggable from 'vuedraggable';
 import SearchableSelect from '../common/SearchableSelect.vue';
 
 const api = useElectronAPI();
+const router = useRouter();
 const theme = inject('theme');
 
 // State
@@ -849,14 +851,91 @@ const handleAddSingleItemToTemplate = (item) => {
   handleAddToTemplate();
 };
 
-const handleSendToZzTakeoff = () => {
-  success.value = 'Send to zzTakeoff - Coming soon';
-  setTimeout(() => success.value = null, 2000);
+const handleSendToZzTakeoff = async () => {
+  if (selectedRows.value.length === 0) {
+    error.value = 'Please select at least one item to send';
+    setTimeout(() => error.value = null, 3000);
+    return;
+  }
+
+  try {
+    // Send the first selected item (single item at a time)
+    const item = selectedRows.value[0];
+    console.log('[zzTakeoff] Sending catalogue item to zzTakeoff:', item);
+
+    // Navigate to zzTakeoff Web tab
+    await router.push('/zztakeoff-web');
+
+    // Wait for the tab to load and webview to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties');
+
+    // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
+    const jsCode = `
+      (function() {
+        try {
+          // First: Navigate to Takeoff tab with active project and zoom state
+          if (typeof Router !== 'undefined' && typeof appLayout !== 'undefined') {
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
+          }
+
+          // Second: Open the takeoff dialogue with item properties
+          startTakeoffWithProperties({
+            type: ${JSON.stringify(item.zzType || 'count')},
+            properties: {
+              name: { value: ${JSON.stringify(item.Description || '')} },
+              sku: { value: ${JSON.stringify(item.ItemCode || '')} },
+              unit: { value: ${JSON.stringify(item.Unit || '')} },
+              'Cost Each': { value: ${JSON.stringify(item.LatestPrice ? item.LatestPrice.toString() : '0')} },
+              'cost centre': { value: ${JSON.stringify(item.CostCentre || '')} }
+            }
+          });
+
+          return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
+        } catch (error) {
+          return { success: false, error: error.message, stack: error.stack };
+        }
+      })()
+    `;
+
+    const result = await api.webview.executeJavaScript(jsCode);
+
+    if (result?.success) {
+      console.log('[zzTakeoff] Successfully sent item to zzTakeoff:', result.note);
+      success.value = `Item sent to zzTakeoff: ${item.ItemCode}`;
+      setTimeout(() => success.value = null, 3000);
+
+      // Track in send history
+      try {
+        await api.sendHistory.add({
+          priceCode: item.ItemCode,
+          description: item.Description,
+          unit: item.Unit,
+          price: item.LatestPrice,
+          costCentre: item.CostCentre,
+          timestamp: new Date().toISOString()
+        });
+      } catch (historyError) {
+        console.error('Failed to save to send history:', historyError);
+      }
+    } else {
+      console.error('[zzTakeoff] Failed to send item:', result);
+      error.value = `Failed to send to zzTakeoff: ${result?.error || 'Unknown error'}`;
+      setTimeout(() => error.value = null, 5000);
+    }
+  } catch (err) {
+    console.error('[zzTakeoff] Error in handleSendToZzTakeoff:', err);
+    error.value = `Error sending to zzTakeoff: ${err.message}`;
+    setTimeout(() => error.value = null, 5000);
+  }
 };
 
-const handleSendSingleItemToZzTakeoff = (item) => {
+const handleSendSingleItemToZzTakeoff = async (item) => {
   selectedRows.value = [item];
-  handleSendToZzTakeoff();
+  await handleSendToZzTakeoff();
 };
 
 const handleExportToExcel = () => {
