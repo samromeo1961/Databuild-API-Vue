@@ -27,13 +27,13 @@
           </div>
         </div>
         <div class="col-md-2">
-          <SearchableMultiSelect
-            v-model="selectedGroups"
+          <SearchableSelect
+            v-model="selectedGroup"
             :options="allSupplierGroups"
             placeholder="All Supplier Groups"
             :labelKey="(item) => `${item.GroupNumber} - ${item.GroupName}`"
             valueKey="GroupNumber"
-            selectAllLabel="✕ Clear Filters"
+            clearLabel="All Supplier Groups"
             @change="onGroupChange"
           />
         </div>
@@ -295,7 +295,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
-import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
+import SearchableSelect from '../common/SearchableSelect.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -316,7 +316,7 @@ const sortOrder = ref('asc');
 
 // Supplier group filtering
 const filteredSupplierGroups = ref([]);
-const selectedGroups = ref([]);
+const selectedGroup = ref(null);
 const showArchived = ref(false);
 const allSupplierGroups = ref([]);  // Store all groups for dropdown
 const groupsLoaded = ref(false);  // Track if groups have been loaded
@@ -567,8 +567,8 @@ const loadData = async () => {
       params.search = searchTerm.value;
     }
 
-    if (selectedGroups.value.length > 0) {
-      params.suppGroup = selectedGroups.value.join(',');
+    if (selectedGroup.value) {
+      params.suppGroup = String(selectedGroup.value);
     }
 
     if (sortField.value) {

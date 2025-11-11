@@ -26,13 +26,13 @@
           </div>
         </div>
         <div class="col-md-2">
-          <SearchableMultiSelect
-            v-model="selectedCostCentres"
+          <SearchableSelect
+            v-model="selectedCostCentre"
             :options="costCentres"
             placeholder="All Cost Centres"
             :labelKey="(item) => `${item.Code} - ${item.Name}`"
             valueKey="Code"
-            selectAllLabel="✕ Clear Filters"
+            clearLabel="All Cost Centres"
             @change="onFilterChange"
           />
         </div>
@@ -396,7 +396,7 @@ import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { Modal } from 'bootstrap';
 import { useElectronAPI } from '../../composables/useElectronAPI';
-import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
+import SearchableSelect from '../common/SearchableSelect.vue';
 import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
@@ -411,7 +411,7 @@ const loading = ref(false);
 const error = ref(null);
 const success = ref(null);
 const searchTerm = ref('');
-const selectedCostCentres = ref([]);
+const selectedCostCentre = ref(null);
 const costCentres = ref([]);
 const totalSize = ref(0);
 const filteredCount = ref(0);
@@ -1087,8 +1087,8 @@ const loadData = async (resetPage = false) => {
       params.searchTerm = searchTerm.value;
     }
 
-    if (selectedCostCentres.value && selectedCostCentres.value.length > 0) {
-      params.costCentres = selectedCostCentres.value.map(cc => String(cc));
+    if (selectedCostCentre.value) {
+      params.costCentres = [String(selectedCostCentre.value)];
       console.log('Sending costCentres filter:', params.costCentres);
     }
 
@@ -1201,7 +1201,7 @@ const clearSearch = () => {
 
 // Filter change handler
 const onFilterChange = () => {
-  console.log('Filter changed, selectedCostCentres:', selectedCostCentres.value);
+  console.log('Filter changed, selectedCostCentre:', selectedCostCentre.value);
   loadData(true); // Reset to first page when filter changes
 };
 
@@ -1688,8 +1688,8 @@ const handleExportToCsv = async () => {
       params.searchTerm = searchTerm.value;
     }
 
-    if (selectedCostCentres.value && selectedCostCentres.value.length > 0) {
-      params.costCentres = selectedCostCentres.value.map(cc => String(cc));
+    if (selectedCostCentre.value) {
+      params.costCentres = [String(selectedCostCentre.value)];
     }
 
     console.log('Exporting all filtered recipes with params:', params);

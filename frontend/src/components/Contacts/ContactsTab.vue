@@ -27,13 +27,13 @@
           </div>
         </div>
         <div class="col-md-2">
-          <SearchableMultiSelect
-            v-model="selectedGroups"
+          <SearchableSelect
+            v-model="selectedGroup"
             :options="allContactGroups"
             placeholder="All Contact Groups"
             :labelKey="(item) => `${item.Code} - ${item.Name}`"
             valueKey="Code"
-            selectAllLabel="✕ Clear Filters"
+            clearLabel="All Contact Groups"
             @change="onGroupChange"
           />
         </div>
@@ -281,7 +281,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
-import SearchableMultiSelect from '../common/SearchableMultiSelect.vue';
+import SearchableSelect from '../common/SearchableSelect.vue';
 import ContactModal from './ContactModal.vue';
 
 const api = useElectronAPI();
@@ -301,7 +301,7 @@ const pageSizeOptions = [25, 50, 100, 200];
 
 // Contact Groups state
 const allContactGroups = ref([]);
-const selectedGroups = ref([]);
+const selectedGroup = ref(null);
 const groupsLoaded = ref(false);
 
 // Column Management Modal
@@ -491,9 +491,9 @@ const loadData = async () => {
       params.search = searchTerm.value;
     }
 
-    // Add group filter (comma-separated list)
-    if (selectedGroups.value.length > 0) {
-      params.group = selectedGroups.value.join(',');
+    // Add group filter
+    if (selectedGroup.value) {
+      params.group = String(selectedGroup.value);
     }
 
     console.log('[DEBUG] getContactsList called with params:', params);
