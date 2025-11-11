@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cmd /c \"timeout /t 30 /nobreak\")",
       "Bash(cmd /c \"timeout /t 20 /nobreak\")",
-      "Bash(cmd /c \"timeout /t 45 /nobreak\")"
+      "Bash(cmd /c \"timeout /t 45 /nobreak\")",
+      "Bash(cmd /c \"timeout /t 50 /nobreak\")"
     ],
     "deny": [],
     "ask": []

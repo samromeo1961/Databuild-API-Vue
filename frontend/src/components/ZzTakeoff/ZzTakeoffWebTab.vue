@@ -193,6 +193,7 @@
         ref="webviewElement"
         :src="currentUrl"
         class="webview-element"
+        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;"
         partition="persist:zztakeoff"
         allowpopups
         webpreferences="nodeIntegration=no,contextIsolation=yes,sandbox=no,webSecurity=yes"
@@ -634,19 +635,16 @@ onUnmounted(() => {
 }
 
 .webview-element {
-  width: 100vw;
-  height: calc(100vh - 120px);
-  min-height: 600px;
-  position: fixed;
-  top: 120px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: block;
-  border: none;
-  outline: none;
-  background-color: #fff;
-  z-index: 1;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: block !important;
+  border: none !important;
+  outline: none !important;
+  background-color: #fff !important;
+  z-index: 1 !important;
 }
 
 /* Dropdown overlay */
