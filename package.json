@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev",
+    "dev": "start \"Vite Dev Server\" cmd /c \"cd frontend && npm run dev\" && timeout /t 5 /nobreak >nul && electron . --dev",
+    "dev:electron-only": "electron . --dev",
     "dev:chrome": "start \"\" \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --user-data-dir=\"%TEMP%\\chrome-debug\" --new-window http://localhost:5173 && timeout /t 2 /nobreak >nul && electron . --dev",
     "dev:frontend": "cd frontend && npm run dev",
     "launch-chrome": "cmd /c launch-chrome-debug.bat",

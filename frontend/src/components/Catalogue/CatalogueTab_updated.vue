@@ -41,16 +41,15 @@
           </div>
         </div>
         <div class="col-md-2">
-          <select
-            class="form-select"
+          <SearchableSelect
             v-model="costCentre"
+            :options="costCentres"
+            :label-key="(cc) => `${cc.Code} - ${cc.Name}`"
+            value-key="Code"
+            placeholder="All Cost Centres"
+            clear-label="All Cost Centres"
             @change="onFilterChange"
-          >
-            <option value="">All Cost Centres</option>
-            <option v-for="cc in costCentres" :key="cc.Code" :value="cc.Code">
-              {{ cc.Code }} - {{ cc.Description }}
-            </option>
-          </select>
+          />
         </div>
         <div class="col-md-7">
           <div class="d-flex justify-content-end align-items-center gap-3">
@@ -286,6 +285,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import SearchableSelect from '../common/SearchableSelect.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
