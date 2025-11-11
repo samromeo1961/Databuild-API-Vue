@@ -1,7 +1,7 @@
 <template>
   <div class="catalogue-tab h-100 d-flex flex-column">
     <!-- Header and Search -->
-    <div class="py-3 px-4 border-bottom">
+    <div class="py-3 px-4 border-bottom" style="position: relative; z-index: 10;">
       <div class="row align-items-center mb-3">
         <div class="col">
           <h4 class="mb-0">
@@ -74,9 +74,10 @@
               @click="handleSendToZzTakeoff"
               :disabled="selectedRows.length === 0 || loading"
               title="Send to zzTakeoff"
+              style="min-width: 45px;"
             >
-              <i class="bi bi-send"></i>
-              <span v-if="loading" class="spinner-border spinner-border-sm ms-1"></span>
+              <i v-if="!loading" class="bi bi-send"></i>
+              <span v-if="loading" class="spinner-border spinner-border-sm"></span>
             </button>
             <button
               class="btn btn-outline-secondary"
@@ -454,7 +455,7 @@ const columnDefs = ref([
             <i class="bi bi-plus-circle"></i>
           </button>
           <button class="btn btn-sm btn-warning" data-action="zztakeoff" title="Send to zzTakeoff">
-            <i class="bi bi-send"></i>
+            <i class="bi bi-send" style="color: #000;"></i>
           </button>
         </div>
       `;
