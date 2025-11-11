@@ -287,7 +287,6 @@ import { useElectronAPI } from '../../composables/useElectronAPI';
 
 const api = useElectronAPI();
 const router = useRouter();
-const isMaximized = inject('webviewMaximized');
 
 const props = defineProps({
   items: {
@@ -418,9 +417,6 @@ const sendToZzTakeoff = async () => {
   sendStatus.value = null;
 
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     // Transform items to zzTakeoff format
     const zzTakeoffItems = itemsConfig.value.map(item => {
       // Map takeoffType to lowercase for zzTakeoff
@@ -460,86 +456,123 @@ const sendToZzTakeoff = async () => {
       timestamp: new Date().toISOString()
     };
 
-    // Save to send history (with original format for display)
-    await api.sendHistory.add({
-      project: selectedProject.value.name,
-      items: itemsConfig.value.map(item => ({
-        code: item.code,
-        description: item.description,
-        takeoffType: item.takeoffType,
-        costType: item.costType,
-        units: item.units,
-        costEach: item.costEach,
-        markup: item.markup,
-        quantity: item.quantity,
-        total: (item.costEach * item.quantity) * (1 + item.markup/100)
-      })),
-      status: 'Success (Simulated)',
-      sentAt: payload.timestamp,
-      itemCount: payload.items.length,
-      totalCost: totalCost.value
-    });
-
-    sendStatus.value = {
-      success: true,
-      message: `Successfully sent ${payload.items.length} items to zzTakeoff project "${selectedProject.value.name}"`
-    };
-
     console.log('[zzTakeoff] Items ready for startTakeoffWithProperties:', JSON.stringify(zzTakeoffItems, null, 2));
 
-    // Navigate to zzTakeoff Web tab and execute Router.go() to open Takeoff tab
+    // Open zzTakeoff in separate window and navigate to Takeoff tab
     try {
-      // Only navigate if not already on the zzTakeoff tab (to preserve maximized state)
-      if (router.currentRoute.value.path !== '/zztakeoff-web') {
-        console.log('[zzTakeoff] Navigating to zzTakeoff Web tab...');
-        await router.push('/zztakeoff-web');
-        // Wait a moment for the BrowserView to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } else {
-        console.log('[zzTakeoff] Already on zzTakeoff Web tab, preserving maximized state');
-        // Just a short delay to ensure modal has closed
-        await new Promise(resolve => setTimeout(resolve, 100));
+      // Check if zzTakeoff window is already open
+      const windowStatus = await api.zzTakeoffWindow.isOpen();
+
+      if (!windowStatus?.isOpen) {
+        console.log('[zzTakeoff] Opening zzTakeoff window for first time...');
+        const openResult = await api.zzTakeoffWindow.open('https://www.zztakeoff.com/login');
+
+        if (!openResult.success) {
+          console.error('[zzTakeoff] Failed to open window:', openResult.message);
+          throw new Error('Failed to open zzTakeoff window');
+        }
+
+        // Wait for window to load and user to login
+        console.log('[zzTakeoff] zzTakeoff window opened. Please login and then click "Send to zzTakeoff" again.');
+
+        sendStatus.value = {
+          success: false,
+          message: 'zzTakeoff window opened. Please login to zzTakeoff, then come back and click "Send to zzTakeoff" again to send the items.'
+        };
+
+        return; // Exit early - user needs to login first
       }
 
-      // Maximize the webview after navigation
-      isMaximized.value = true;
+      console.log('[zzTakeoff] Window already open, focusing and sending data...');
+      // Just focus the window without navigating
+      await api.zzTakeoffWindow.open(); // No URL = just focus
 
-      // Execute zzTakeoff developer's code to navigate to Takeoff tab
-      if (api.webview && api.webview.executeJavaScript) {
-        const result = await api.webview.executeJavaScript(`
-          (function() {
-            try {
-              // Check if Router and appLayout are available
-              if (typeof Router === 'undefined') {
-                return { success: false, error: 'Router is not defined' };
-              }
-              if (typeof appLayout === 'undefined') {
-                return { success: false, error: 'appLayout is not defined' };
-              }
-
-              // Execute zzTakeoff's navigation code
-              const takeoffUrl = appLayout.getAppUrl('takeoff');
-              console.log('[zzTakeoff] Navigating to:', takeoffUrl);
-              Router.go(takeoffUrl);
-
-              return { success: true, url: takeoffUrl };
-            } catch (error) {
-              return { success: false, error: error.message, stack: error.stack };
+      // Execute zzTakeoff developer's code to navigate to Takeoff tab and send data
+      console.log('[zzTakeoff] Executing Router.go() and startTakeoffWithProperties() in separate window...');
+      const result = await api.zzTakeoffWindow.executeJavaScript(`
+        (function() {
+          try {
+            // Check if Router and appLayout are available
+            if (typeof Router === 'undefined') {
+              return { success: false, error: 'Router is not defined - page may not be fully loaded' };
             }
-          })()
-        `);
+            if (typeof appLayout === 'undefined') {
+              return { success: false, error: 'appLayout is not defined - page may not be fully loaded' };
+            }
 
-        console.log('[zzTakeoff] Router.go() execution result:', result);
+            // Execute zzTakeoff's navigation code
+            const takeoffUrl = appLayout.getAppUrl('takeoff');
+            console.log('[zzTakeoff] Navigating to:', takeoffUrl);
+            Router.go(takeoffUrl);
 
-        if (result && result.success) {
-          console.log('[zzTakeoff] Successfully navigated to Takeoff tab:', result.url);
+            // Now execute startTakeoffWithProperties with the items
+            const items = ${JSON.stringify(zzTakeoffItems)};
+            console.log('[zzTakeoff] Calling startTakeoffWithProperties with items:', items);
+
+            // Check if function exists
+            if (typeof startTakeoffWithProperties === 'function') {
+              startTakeoffWithProperties(items);
+              return { success: true, url: takeoffUrl, itemsSent: items.length };
+            } else {
+              return { success: false, error: 'startTakeoffWithProperties function not found' };
+            }
+          } catch (error) {
+            return { success: false, error: error.message, stack: error.stack };
+          }
+        })()
+      `);
+
+      console.log('[zzTakeoff] Execution result:', result);
+
+      if (result?.success && result.result?.success) {
+        console.log('[zzTakeoff] Successfully sent items to Takeoff tab:', result.result.itemsSent, 'items');
+
+        // Save to send history
+        await api.sendHistory.add({
+          project: selectedProject.value.name,
+          items: itemsConfig.value.map(item => ({
+            code: item.code,
+            description: item.description,
+            takeoffType: item.takeoffType,
+            costType: item.costType,
+            units: item.units,
+            costEach: item.costEach,
+            markup: item.markup,
+            quantity: item.quantity,
+            total: (item.costEach * item.quantity) * (1 + item.markup/100)
+          })),
+          status: 'Success',
+          sentAt: payload.timestamp,
+          itemCount: payload.items.length,
+          totalCost: totalCost.value
+        });
+
+        sendStatus.value = {
+          success: true,
+          message: `Successfully sent ${result.result.itemsSent} items to zzTakeoff project "${selectedProject.value.name}"`
+        };
+      } else {
+        const errorMsg = result?.result?.error || result?.message || 'Unknown error';
+        console.error('[zzTakeoff] Failed to send items:', errorMsg);
+
+        if (errorMsg.includes('not defined') || errorMsg.includes('not found')) {
+          sendStatus.value = {
+            success: false,
+            message: 'Please make sure you are logged into zzTakeoff and on the main page, then try again.'
+          };
         } else {
-          console.error('[zzTakeoff] Failed to navigate to Takeoff tab:', result?.error);
+          sendStatus.value = {
+            success: false,
+            message: 'Failed to send items to zzTakeoff: ' + errorMsg
+          };
         }
       }
     } catch (error) {
-      console.error('[zzTakeoff] Error navigating to Takeoff tab:', error);
-      // Don't fail the whole send operation if navigation fails
+      console.error('[zzTakeoff] Error with zzTakeoff window:', error);
+      sendStatus.value = {
+        success: false,
+        message: 'Error communicating with zzTakeoff window: ' + error.message
+      };
     }
 
     emit('sent', payload);

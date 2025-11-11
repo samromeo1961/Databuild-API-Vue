@@ -152,6 +152,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (priceCode) => ipcRenderer.invoke('zztype:delete', priceCode)
   },
 
+  // zzTakeoff Window (Separate BrowserWindow for zzTakeoff integration)
+  zzTakeoffWindow: {
+    open: (url) => ipcRenderer.invoke('zztakeoff-window:open', url),
+    executeJavaScript: (code) => ipcRenderer.invoke('zztakeoff-window:execute-javascript', code),
+    isOpen: () => ipcRenderer.invoke('zztakeoff-window:is-open')
+  },
+
+  // Main window navigation tracking
+  mainWindow: {
+    trackNavigation: (tabName, tabPath) => ipcRenderer.invoke('main-window:track-navigation', tabName, tabPath)
+  },
+
   // BrowserView for zzTakeoff Webview
   webview: {
     create: (url, bounds) => ipcRenderer.invoke('webview:create', url, bounds),

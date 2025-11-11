@@ -2109,20 +2109,26 @@ const handleSendToZzTakeoff = async () => {
   try {
     console.log('[zzTakeoff] Preparing to send items:', selectedRows.value);
 
-    // Navigate to zzTakeoff Web tab (only if not already there to preserve maximized state)
-    if (router.currentRoute.value.path !== '/zztakeoff-web') {
-      await router.push('/zztakeoff-web');
-      // Wait for the tab to load and webview to be ready
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    } else {
-      // Just a short delay to ensure ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Check if zzTakeoff window is already open
+    const windowStatus = await api.zzTakeoffWindow.isOpen();
+
+    if (!windowStatus?.isOpen) {
+      // First time - open window and ask user to login
+      console.log('[zzTakeoff] Opening zzTakeoff window for login...');
+      const openResult = await api.zzTakeoffWindow.open('https://www.zztakeoff.com/login');
+
+      if (openResult?.success) {
+        success.value = 'zzTakeoff window opened. Please login to zzTakeoff, then click "Send to zzTakeoff" again to send the items.';
+        setTimeout(() => success.value = null, 5000);
+      } else {
+        error.value = 'Failed to open zzTakeoff window';
+      }
+      return;
     }
 
-    // Maximize the webview after navigation
-    isMaximized.value = true;
-
-    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
+    // Window is already open - focus it without navigating (preserve login session)
+    console.log('[zzTakeoff] zzTakeoff window already open, focusing and sending data...');
+    await api.zzTakeoffWindow.open(); // Focus without URL parameter
 
     // Send the first item (single item mode)
     const row = selectedRows.value[0];
@@ -2173,28 +2179,32 @@ const handleSendToZzTakeoff = async () => {
 
     console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
 
-    // Execute the JavaScript in the BrowserView
-    const result = await api.webview.executeJavaScript(jsCode);
+    // Execute the JavaScript in the zzTakeoff window
+    const result = await api.zzTakeoffWindow.executeJavaScript(jsCode);
 
     console.log('[zzTakeoff] JavaScript execution result:', result);
 
-    // Add to send history
-    await api.sendHistory.add({
-      items: [{
-        code: row.PriceCode,
-        description: row.description || row.Description,
-        unit: row.Unit,
-        price: row.Price,
-        quantity: row.quantity || 1
-      }],
-      project: 'Template: ' + selectedTemplate.value.templateName,
-      status: result.success ? 'Success' : 'Failed',
-      sentAt: new Date().toISOString(),
-      itemCount: 1
-    });
+    // Only add to send history if successful
+    if (result?.success || result?.result?.success) {
+      await api.sendHistory.add({
+        items: [{
+          code: row.PriceCode,
+          description: row.description || row.Description,
+          unit: row.Unit,
+          price: row.Price,
+          quantity: row.quantity || 1
+        }],
+        project: 'Template: ' + selectedTemplate.value.templateName,
+        status: 'Success',
+        sentAt: new Date().toISOString(),
+        itemCount: 1
+      });
 
-    success.value = `Sent "${row.description || row.Description}" to zzTakeoff`;
-    setTimeout(() => success.value = null, 3000);
+      success.value = `Sent "${row.description || row.Description}" to zzTakeoff`;
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to send item to zzTakeoff';
+    }
 
   } catch (err) {
     console.error('Error sending to zzTakeoff:', err);

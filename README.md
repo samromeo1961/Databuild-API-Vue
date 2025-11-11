@@ -2,7 +2,7 @@
 
 > **Electron desktop application for Databuild SQL Server database management with Vue 3 + AG Grid interface**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.9-blue)
 ![Status](https://img.shields.io/badge/status-beta-yellow)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -37,7 +37,7 @@ Download the latest release and help us improve DBx Connector Vue. See the [Beta
 
 ### Quick Start for Beta Testers
 
-1. Download `DBx Connector Vue Setup 1.0.0.exe` from [Releases](https://github.com/samromeo1961/Databuild-API-Vue/releases)
+1. Download `DBx Connector Vue Setup 1.3.9.exe` from [Releases](https://github.com/samromeo1961/Databuild-API-Vue/releases)
 2. Run the installer
 3. Configure your Databuild SQL Server connection
 4. Start using the app!

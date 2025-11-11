@@ -193,9 +193,12 @@
         ref="webviewElement"
         :src="currentUrl"
         class="webview-element"
-        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;"
+        style="position: fixed; top: 52px; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; min-width: 100vw; min-height: calc(100vh - 52px);"
         partition="persist:zztakeoff"
         allowpopups
+        autosize="on"
+        minwidth="800"
+        minheight="600"
         webpreferences="nodeIntegration=no,contextIsolation=yes,sandbox=no,webSecurity=yes"
       ></webview>
 
@@ -302,6 +305,26 @@ const setupWebviewListeners = () => {
   webview.addEventListener('dom-ready', () => {
     console.log('[Webview] DOM ready - webview initialized');
     console.log('[Webview] Can execute code in webview now');
+
+    // Force webview dimensions
+    const viewportHeight = window.innerHeight - 52; // Subtract toolbar height
+    const viewportWidth = window.innerWidth;
+
+    console.log('[Webview] Setting dimensions:', { width: viewportWidth, height: viewportHeight });
+
+    // Set via style
+    webview.style.width = `${viewportWidth}px`;
+    webview.style.height = `${viewportHeight}px`;
+
+    // Also try setting as attributes
+    webview.setAttribute('style', `position: fixed; top: 52px; left: 0; width: ${viewportWidth}px; height: ${viewportHeight}px; z-index: 1;`);
+
+    console.log('[Webview] Dimensions set, actual computed:', {
+      offsetWidth: webview.offsetWidth,
+      offsetHeight: webview.offsetHeight,
+      clientWidth: webview.clientWidth,
+      clientHeight: webview.clientHeight
+    });
 
     // Open devtools for the webview in development (optional)
     if (window.location.protocol === 'http:') {

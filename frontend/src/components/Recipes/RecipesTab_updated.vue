@@ -1601,13 +1601,25 @@ const handleSendToZzTakeoff = async (item) => {
   try {
     console.log('[zzTakeoff] Sending recipe to zzTakeoff:', item);
 
-    // Navigate to zzTakeoff Web tab
-    await router.push('/zztakeoff-web');
+    // Check if zzTakeoff window is open
+    const windowStatus = await api.zzTakeoffWindow.isOpen();
 
-    // Wait for the tab to load and webview to be ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!windowStatus?.isOpen) {
+      console.log('[zzTakeoff] Opening zzTakeoff window for first time...');
+      const openResult = await api.zzTakeoffWindow.open('https://www.zztakeoff.com/login');
 
-    console.log('[zzTakeoff] Skipping page navigation - Router.go() will handle it');
+      if (!openResult.success) {
+        throw new Error('Failed to open zzTakeoff window');
+      }
+
+      error.value = 'zzTakeoff window opened. Please login, then click the send button again.';
+      setTimeout(() => error.value = null, 5000);
+      return;
+    }
+
+    console.log('[zzTakeoff] Window already open, focusing and sending item...');
+    // Focus window without navigating
+    await api.zzTakeoffWindow.open();
 
     // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
@@ -1621,6 +1633,10 @@ const handleSendToZzTakeoff = async (item) => {
           }
 
           // Second: Open the takeoff dialogue with item properties
+          if (typeof startTakeoffWithProperties !== 'function') {
+            return { success: false, error: 'startTakeoffWithProperties function not found' };
+          }
+
           startTakeoffWithProperties({
             type: ${JSON.stringify(item.zzType || 'count')},
             properties: {
@@ -1640,10 +1656,10 @@ const handleSendToZzTakeoff = async (item) => {
     `;
 
     console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties (Router.go FIRST)');
-    const result = await api.webview.executeJavaScript(jsCode);
+    const result = await api.zzTakeoffWindow.executeJavaScript(jsCode);
 
-    if (result?.success) {
-      console.log('[zzTakeoff] Successfully sent recipe to zzTakeoff:', result.note);
+    if (result?.success && result.result?.success) {
+      console.log('[zzTakeoff] Successfully sent recipe to zzTakeoff:', result.result.note);
       success.value = `Recipe sent to zzTakeoff: ${item.PriceCode}`;
       setTimeout(() => success.value = null, 3000);
 
@@ -1661,8 +1677,14 @@ const handleSendToZzTakeoff = async (item) => {
         console.error('Failed to save to send history:', historyError);
       }
     } else {
-      console.error('[zzTakeoff] Failed to send recipe:', result);
-      error.value = `Failed to send to zzTakeoff: ${result?.error || 'Unknown error'}`;
+      const errorMsg = result?.result?.error || result?.message || 'Unknown error';
+      console.error('[zzTakeoff] Failed to send recipe:', errorMsg);
+
+      if (errorMsg.includes('not defined') || errorMsg.includes('not found')) {
+        error.value = 'Please make sure you are logged into zzTakeoff and on the main page, then try again.';
+      } else {
+        error.value = `Failed to send to zzTakeoff: ${errorMsg}`;
+      }
       setTimeout(() => error.value = null, 5000);
     }
   } catch (err) {

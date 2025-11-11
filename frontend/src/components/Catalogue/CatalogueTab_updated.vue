@@ -888,14 +888,25 @@ const handleSendToZzTakeoff = async () => {
     const item = selectedRows.value[0];
     console.log('[zzTakeoff] Sending catalogue item to zzTakeoff:', item);
 
-    // Navigate to zzTakeoff Web tab
-    await router.push('/zztakeoff-web');
+    // Check if zzTakeoff window is open
+    const windowStatus = await api.zzTakeoffWindow.isOpen();
 
-    // Wait longer for the tab to load and webview to be ready (increased from 1s to 2s)
-    console.log('[zzTakeoff] Waiting for webview to load...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (!windowStatus?.isOpen) {
+      console.log('[zzTakeoff] Opening zzTakeoff window for first time...');
+      const openResult = await api.zzTakeoffWindow.open('https://www.zztakeoff.com/login');
 
-    console.log('[zzTakeoff] Executing Router.go() + startTakeoffWithProperties');
+      if (!openResult.success) {
+        throw new Error('Failed to open zzTakeoff window');
+      }
+
+      error.value = 'zzTakeoff window opened. Please login, then click the send button again.';
+      setTimeout(() => error.value = null, 5000);
+      return;
+    }
+
+    console.log('[zzTakeoff] Window already open, focusing and sending item...');
+    // Focus window without navigating
+    await api.zzTakeoffWindow.open();
 
     // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
@@ -909,6 +920,10 @@ const handleSendToZzTakeoff = async () => {
           }
 
           // Second: Open the takeoff dialogue with item properties
+          if (typeof startTakeoffWithProperties !== 'function') {
+            return { success: false, error: 'startTakeoffWithProperties function not found' };
+          }
+
           startTakeoffWithProperties({
             type: ${JSON.stringify(item.zzType || 'count')},
             properties: {
@@ -927,10 +942,10 @@ const handleSendToZzTakeoff = async () => {
       })()
     `;
 
-    const result = await api.webview.executeJavaScript(jsCode);
+    const result = await api.zzTakeoffWindow.executeJavaScript(jsCode);
 
-    if (result?.success) {
-      console.log('[zzTakeoff] Successfully sent item to zzTakeoff:', result.note);
+    if (result?.success && result.result?.success) {
+      console.log('[zzTakeoff] Successfully sent item to zzTakeoff:', result.result.note);
       success.value = `Item sent to zzTakeoff: ${item.ItemCode}`;
       setTimeout(() => success.value = null, 3000);
 
@@ -948,8 +963,14 @@ const handleSendToZzTakeoff = async () => {
         console.error('Failed to save to send history:', historyError);
       }
     } else {
-      console.error('[zzTakeoff] Failed to send item:', result);
-      error.value = `Failed to send to zzTakeoff: ${result?.error || 'Unknown error'}`;
+      const errorMsg = result?.result?.error || result?.message || 'Unknown error';
+      console.error('[zzTakeoff] Failed to send item:', errorMsg);
+
+      if (errorMsg.includes('not defined') || errorMsg.includes('not found')) {
+        error.value = 'Please make sure you are logged into zzTakeoff and on the main page, then try again.';
+      } else {
+        error.value = `Failed to send to zzTakeoff: ${errorMsg}`;
+      }
       setTimeout(() => error.value = null, 5000);
     }
   } catch (err) {

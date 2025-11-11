@@ -45,7 +45,7 @@ const routes = [
   {
     path: '/zztakeoff-web',
     name: 'zzTakeoff Web',
-    component: () => import('../components/ZzTakeoff/ZzTakeoffWebTab.vue')
+    component: () => import('../components/ZzTakeoff/ZzTakeoffWebTab_Window.vue')
   }
 ];
 

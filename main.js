@@ -69,6 +69,8 @@ const store = new Store();
 let mainWindow = null;
 let settingsWindow = null;
 let webView = null; // BrowserView for zzTakeoff webview
+let zzTakeoffWindow = null; // Separate window for zzTakeoff integration
+let lastNavigatedTab = { name: 'Catalogue', path: '/catalogue' }; // Track last navigated tab
 
 /**
  * Create the database settings window
@@ -95,6 +97,225 @@ function createSettingsWindow() {
       app.quit();
     }
   });
+}
+
+/**
+ * Helper function to navigate to a tab and update last navigated tab
+ * If main window is closed, recreate it first
+ */
+function navigateToTab(tabName, tabPath) {
+  lastNavigatedTab = { name: tabName, path: tabPath };
+
+  // If main window doesn't exist or is destroyed, recreate it
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.log('[Navigation] Main window closed, recreating...');
+    createMainWindow();
+    // Give the window time to load before sending navigation
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('navigate-to', tabPath);
+        mainWindow.focus();
+      }
+    }, 1000);
+  } else {
+    mainWindow.webContents.send('navigate-to', tabPath);
+    mainWindow.focus();
+  }
+
+  // Update the menu to reflect the new "Back to" option
+  if (zzTakeoffWindow && !zzTakeoffWindow.isDestroyed()) {
+    updateZzTakeoffWindowMenu();
+  }
+}
+
+/**
+ * Build and set the zzTakeoff window menu
+ */
+function updateZzTakeoffWindowMenu() {
+  if (!zzTakeoffWindow || zzTakeoffWindow.isDestroyed()) return;
+
+  const zzTakeoffMenu = Menu.buildFromTemplate([
+    {
+      label: 'Navigate Main Window',
+      submenu: [
+        {
+          label: 'Catalogue',
+          click: () => navigateToTab('Catalogue', '/catalogue')
+        },
+        {
+          label: 'Recipes',
+          click: () => navigateToTab('Recipes', '/recipes')
+        },
+        {
+          label: 'Suppliers',
+          click: () => navigateToTab('Suppliers', '/suppliers')
+        },
+        {
+          label: 'Contacts',
+          click: () => navigateToTab('Contacts', '/contacts')
+        },
+        {
+          label: 'Templates',
+          click: () => navigateToTab('Templates', '/templates')
+        },
+        {
+          label: 'Favourites',
+          click: () => navigateToTab('Favourites', '/favourites')
+        },
+        {
+          label: 'Recents',
+          click: () => navigateToTab('Recents', '/recents')
+        },
+        { type: 'separator' },
+        {
+          label: 'Focus Main Window',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.focus();
+            }
+          }
+        }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About zzTakeoff',
+          click: () => {
+            require('electron').shell.openExternal('https://www.zztakeoff.com');
+          }
+        }
+      ]
+    },
+    {
+      label: `← Back to ${lastNavigatedTab.name}`,
+      accelerator: 'Ctrl+Shift+B',
+      click: () => {
+        // Use navigateToTab which will recreate main window if needed
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          console.log('[Menu] Main window closed, recreating...');
+          createMainWindow();
+          // Give the window time to load before sending navigation
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('navigate-to', lastNavigatedTab.path);
+              mainWindow.focus();
+            }
+          }, 1000);
+        } else {
+          mainWindow.webContents.send('navigate-to', lastNavigatedTab.path);
+          mainWindow.focus();
+        }
+      }
+    }
+  ]);
+
+  zzTakeoffWindow.setMenu(zzTakeoffMenu);
+}
+
+/**
+ * Open zzTakeoff in a separate BrowserWindow
+ */
+function openZzTakeoffWindow(url) {
+  console.log('🚀 openZzTakeoffWindow() called with URL:', url);
+
+  // If window already exists, focus it and optionally navigate
+  if (zzTakeoffWindow && !zzTakeoffWindow.isDestroyed()) {
+    console.log('zzTakeoff window already exists, focusing...');
+    zzTakeoffWindow.focus();
+    // Only navigate if URL is provided
+    if (url && zzTakeoffWindow.webContents) {
+      console.log('Navigating to:', url);
+      zzTakeoffWindow.webContents.loadURL(url);
+      return { success: true, message: 'zzTakeoff window focused and navigated' };
+    }
+    return { success: true, message: 'zzTakeoff window focused (no navigation)' };
+  }
+
+  // If no URL provided and window doesn't exist, use default
+  if (!url) {
+    url = 'https://www.zztakeoff.com/login';
+    console.log('No URL provided, using default:', url);
+  }
+
+  try {
+    // Create new window
+    zzTakeoffWindow = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false, // Disable sandbox for compatibility
+        partition: 'persist:zztakeoff', // Persistent session
+        webSecurity: true,
+        enableRemoteModule: false
+      },
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+      title: 'zzTakeoff - DBx Connector',
+      autoHideMenuBar: false // Show menu bar for navigation
+    });
+
+    // Set up the custom menu with dynamic "Back to [Tab]" option
+    updateZzTakeoffWindowMenu();
+
+    // Load the URL
+    zzTakeoffWindow.loadURL(url);
+
+    // Open DevTools in development
+    if (!app.isPackaged) {
+      zzTakeoffWindow.webContents.openDevTools();
+    }
+
+    // Clean up reference when closed
+    zzTakeoffWindow.on('closed', () => {
+      console.log('zzTakeoff window closed');
+      zzTakeoffWindow = null;
+    });
+
+    // Log when ready
+    zzTakeoffWindow.webContents.on('did-finish-load', () => {
+      console.log('zzTakeoff window loaded:', zzTakeoffWindow.webContents.getURL());
+    });
+
+    // Log navigation
+    zzTakeoffWindow.webContents.on('did-navigate', (event, url) => {
+      console.log('zzTakeoff window navigated to:', url);
+    });
+
+    // Error handling
+    zzTakeoffWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      console.error('zzTakeoff window failed to load:', errorCode, errorDescription);
+    });
+
+    console.log('zzTakeoff window created successfully');
+    return { success: true, message: 'zzTakeoff window opened' };
+
+  } catch (error) {
+    console.error('Error creating zzTakeoff window:', error);
+    return { success: false, message: error.message };
+  }
 }
 
 /**
@@ -254,11 +475,14 @@ function createMainWindow() {
         },
         { type: 'separator' },
         {
-          label: 'zzTakeoff Web',
+          label: 'zzTakeoff Window',
           accelerator: 'Ctrl+8',
           click: () => {
-            if (mainWindow) {
-              mainWindow.webContents.send('navigate-to', '/zztakeoff-web');
+            // Open or focus the separate zzTakeoff window
+            if (zzTakeoffWindow && !zzTakeoffWindow.isDestroyed()) {
+              zzTakeoffWindow.focus();
+            } else {
+              openZzTakeoffWindow('https://www.zztakeoff.com/login');
             }
           }
         },
@@ -539,6 +763,46 @@ ipcMain.handle('recents-store:clear', recentsStoreHandlers.handleClearRecents);
 ipcMain.handle('zztype:get', zzTypeStoreHandlers.getZzType);
 ipcMain.handle('zztype:set', zzTypeStoreHandlers.setZzType);
 ipcMain.handle('zztype:get-all', zzTypeStoreHandlers.getAllZzTypes);
+
+// ============================================================
+// IPC Handlers for zzTakeoff Window (Separate BrowserWindow)
+// ============================================================
+
+ipcMain.handle('zztakeoff-window:open', async (event, url) => {
+  return openZzTakeoffWindow(url);
+});
+
+ipcMain.handle('zztakeoff-window:execute-javascript', async (event, code) => {
+  if (!zzTakeoffWindow || zzTakeoffWindow.isDestroyed()) {
+    return { success: false, message: 'zzTakeoff window is not open' };
+  }
+
+  try {
+    const result = await zzTakeoffWindow.webContents.executeJavaScript(code);
+
+    // After successfully executing (which means we sent data), focus the zzTakeoff window
+    if (result && result.success !== false) {
+      zzTakeoffWindow.focus();
+      console.log('Auto-focused zzTakeoff window after sending data');
+    }
+
+    return { success: true, result };
+  } catch (error) {
+    console.error('Error executing JavaScript in zzTakeoff window:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('zztakeoff-window:is-open', () => {
+  return { isOpen: zzTakeoffWindow && !zzTakeoffWindow.isDestroyed() };
+});
+
+// Track when user navigates in main window to update "Back to [Tab]" menu
+ipcMain.handle('main-window:track-navigation', (event, tabName, tabPath) => {
+  lastNavigatedTab = { name: tabName, path: tabPath };
+  updateZzTakeoffWindowMenu();
+  return { success: true };
+});
 ipcMain.handle('zztype:delete', zzTypeStoreHandlers.deleteZzType);
 
 // ============================================================
@@ -970,6 +1234,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  // Don't quit if zzTakeoff window is still open
+  if (zzTakeoffWindow && !zzTakeoffWindow.isDestroyed()) {
+    console.log('[App] Main window closed but zzTakeoff window still open - keeping app alive');
+    return;
+  }
+
   // Close database connection
   db.close();
 

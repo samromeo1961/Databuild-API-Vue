@@ -157,6 +157,18 @@ export function useElectronAPI() {
       delete: (priceCode) => window.electronAPI?.zzTypeStore.delete(priceCode)
     },
 
+    // zzTakeoff Window (Separate BrowserWindow for zzTakeoff integration)
+    zzTakeoffWindow: {
+      open: (url) => window.electronAPI?.zzTakeoffWindow.open(url),
+      executeJavaScript: (code) => window.electronAPI?.zzTakeoffWindow.executeJavaScript(code),
+      isOpen: () => window.electronAPI?.zzTakeoffWindow.isOpen()
+    },
+
+    // Main window navigation tracking
+    mainWindow: {
+      trackNavigation: (tabName, tabPath) => window.electronAPI?.mainWindow.trackNavigation(tabName, tabPath)
+    },
+
     // BrowserView for zzTakeoff Webview
     webview: {
       create: (url, bounds) => window.electronAPI?.webview.create(url, bounds),
