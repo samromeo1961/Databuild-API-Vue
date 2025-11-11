@@ -414,7 +414,10 @@ const columnDefs = ref([
     filter: 'agTextColumnFilter',
     sortable: true,
     editable: true,
-    cellEditor: 'agTextCellEditor',
+    cellEditor: 'agSelectCellEditor',
+    cellEditorParams: {
+      values: ['', 'area', 'linear', 'segment', 'count']
+    },
     hide: false
   },
   {

@@ -646,7 +646,7 @@ const columnDefs = ref([
     editable: (params) => !params.data.isChild && params.data.Unit !== 'HEADING',
     cellEditor: 'agSelectCellEditor',
     cellEditorParams: {
-      values: ['area', 'linear', 'segment', 'count']
+      values: ['', 'area', 'linear', 'segment', 'count']
     },
     valueFormatter: (params) => {
       // Don't show for child rows or heading rows
