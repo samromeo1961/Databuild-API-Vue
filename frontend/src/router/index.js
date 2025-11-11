@@ -1,15 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
-// Import tab components
-import CatalogueTab from '../components/Catalogue/CatalogueTab_updated.vue';
-import RecipesTab from '../components/Recipes/RecipesTab_updated.vue';
-import SuppliersTab from '../components/Suppliers/SuppliersTab.vue';
-import ContactsTab from '../components/Contacts/ContactsTab.vue';
-import TemplatesTab from '../components/Templates/TemplatesTab.vue';
-import FavouritesTab from '../components/Favourites/FavouritesTab.vue';
-import RecentsTab from '../components/Recents/RecentsTab.vue';
-import ZzTakeoffWebTab from '../components/ZzTakeoff/ZzTakeoffWebTab.vue';
-
+// Use lazy loading for route components to enable code splitting
+// Each route will be loaded only when accessed, reducing initial bundle size
 const routes = [
   {
     path: '/',
@@ -18,42 +10,42 @@ const routes = [
   {
     path: '/catalogue',
     name: 'Catalogue',
-    component: CatalogueTab
+    component: () => import('../components/Catalogue/CatalogueTab_updated.vue')
   },
   {
     path: '/recipes',
     name: 'Recipes',
-    component: RecipesTab
+    component: () => import('../components/Recipes/RecipesTab_updated.vue')
   },
   {
     path: '/suppliers',
     name: 'Suppliers',
-    component: SuppliersTab
+    component: () => import('../components/Suppliers/SuppliersTab.vue')
   },
   {
     path: '/contacts',
     name: 'Contacts',
-    component: ContactsTab
+    component: () => import('../components/Contacts/ContactsTab.vue')
   },
   {
     path: '/templates',
     name: 'Templates',
-    component: TemplatesTab
+    component: () => import('../components/Templates/TemplatesTab.vue')
   },
   {
     path: '/favourites',
     name: 'Favourites',
-    component: FavouritesTab
+    component: () => import('../components/Favourites/FavouritesTab.vue')
   },
   {
     path: '/recents',
     name: 'Recents',
-    component: RecentsTab
+    component: () => import('../components/Recents/RecentsTab.vue')
   },
   {
     path: '/zztakeoff-web',
     name: 'zzTakeoff Web',
-    component: ZzTakeoffWebTab
+    component: () => import('../components/ZzTakeoff/ZzTakeoffWebTab.vue')
   }
 ];
 
