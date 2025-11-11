@@ -627,14 +627,19 @@ onUnmounted(() => {
 .webview-container {
   background-color: #ffffff;
   min-height: 200px;
+  position: relative;
+  overflow: hidden;
 }
 
 .webview-element {
   width: 100%;
   height: 100%;
+  min-height: 600px;
   position: absolute;
   top: 0;
   left: 0;
+  right: 0;
+  bottom: 0;
   display: block;
   border: none;
   outline: none;
