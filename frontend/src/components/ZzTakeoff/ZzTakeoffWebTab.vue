@@ -180,15 +180,23 @@
       </div>
     </div>
 
-    <!-- Info Message - BrowserView renders natively (only show when not maximized and no error) -->
+    <!-- Info Message - Webview info (only show when not maximized and no error) -->
     <div v-if="!hasError && !isMaximized" class="alert alert-info m-3" role="alert">
       <i class="bi bi-info-circle me-2"></i>
-      <strong>Native Web View</strong> - This page is rendered using Electron's BrowserView. Click the <i class="bi bi-fullscreen"></i> button to maximize once logged in.
+      <strong>Native Web View</strong> - This page is rendered using Electron's webview tag. Click the <i class="bi bi-fullscreen"></i> button to maximize once logged in.
     </div>
 
-    <!-- Webview Container (BrowserView will be positioned here) -->
+    <!-- Webview Container -->
     <div class="webview-container flex-grow-1 position-relative" ref="webviewContainerRef">
-      <!-- BrowserView will be overlaid by Electron -->
+      <!-- Electron webview tag for reliable external content loading -->
+      <webview
+        ref="webviewElement"
+        :src="currentUrl"
+        class="webview-element"
+        partition="persist:zztakeoff"
+        allowpopups
+        webpreferences="contextIsolation=true,sandbox=false"
+      ></webview>
 
       <!-- Grey overlay when dropdown is open -->
       <div
@@ -216,6 +224,7 @@ const isMaximized = inject('webviewMaximized');
 // Refs
 const containerRef = ref(null);
 const webviewContainerRef = ref(null);
+const webviewElement = ref(null); // Reference to <webview> DOM element
 const currentUrl = ref('https://www.zztakeoff.com/login');
 const isLoading = ref(false);
 const errorMessage = ref(null);
@@ -254,136 +263,140 @@ const lastTabLabel = computed(() => {
 });
 
 // Toggle tab dropdown
-const toggleTabDropdown = async () => {
+const toggleTabDropdown = () => {
   showTabDropdown.value = !showTabDropdown.value;
-
-  // When dropdown opens, adjust BrowserView bounds to make room
-  if (showTabDropdown.value) {
-    await nextTick();
-    const bounds = calculateBounds();
-    if (bounds && api.webview) {
-      // Reserve 450px for the dropdown menu
-      const dropdownHeight = 450;
-      const adjustedBounds = {
-        ...bounds,
-        y: bounds.y + dropdownHeight,
-        height: Math.max(bounds.height - dropdownHeight, 100)
-      };
-      await api.webview.setBounds(adjustedBounds);
-    }
-  } else {
-    // Restore original bounds when dropdown closes
-    await nextTick();
-    handleResize();
-  }
 };
 
 // Close dropdown
-const closeDropdown = async () => {
+const closeDropdown = () => {
   showTabDropdown.value = false;
-  await nextTick();
-  handleResize();
 };
 
 // Exit fullscreen function
-const exitFullscreen = async () => {
+const exitFullscreen = () => {
   showTabDropdown.value = false; // Close dropdown
-  await nextTick();
-  handleResize(); // Restore bounds
   isMaximized.value = false; // Exit fullscreen mode
 };
 
-// Calculate bounds for BrowserView
-const calculateBounds = () => {
-  if (!webviewContainerRef.value) return null;
+// Setup webview element event listeners
+const setupWebviewListeners = () => {
+  if (!webviewElement.value) {
+    console.warn('Webview element not available, retrying...');
+    setTimeout(setupWebviewListeners, 100);
+    return;
+  }
 
-  const rect = webviewContainerRef.value.getBoundingClientRect();
-  return {
-    x: Math.round(rect.left),
-    y: Math.round(rect.top),
-    width: Math.round(rect.width),
-    height: Math.round(rect.height)
-  };
-};
+  const webview = webviewElement.value;
 
-// Create BrowserView
-const createWebView = async () => {
-  try {
-    await nextTick();
-    const bounds = calculateBounds();
+  // Loading events
+  webview.addEventListener('did-start-loading', () => {
+    isLoading.value = true;
+    hasError.value = false;
+    console.log('Webview started loading');
+  });
 
-    if (!bounds || bounds.width === 0 || bounds.height === 0) {
-      console.warn('Invalid bounds, retrying...');
-      setTimeout(createWebView, 100);
+  webview.addEventListener('did-stop-loading', () => {
+    isLoading.value = false;
+    console.log('Webview stopped loading');
+  });
+
+  // Navigation events
+  webview.addEventListener('did-navigate', (event) => {
+    currentUrl.value = event.url;
+    canGoBack.value = webview.canGoBack();
+    canGoForward.value = webview.canGoForward();
+    console.log('Webview navigated to:', event.url);
+  });
+
+  webview.addEventListener('did-navigate-in-page', (event) => {
+    currentUrl.value = event.url;
+    console.log('Webview navigated in-page to:', event.url);
+  });
+
+  // Error handling
+  webview.addEventListener('did-fail-load', (event) => {
+    // Ignore -3 (ERR_ABORTED) errors for subframes and when navigating
+    if (event.errorCode === -3 && !event.isMainFrame) {
+      console.log('Ignoring ERR_ABORTED for subframe');
       return;
     }
 
-    console.log('Creating BrowserView with bounds:', bounds);
-    const result = await api.webview.create(currentUrl.value, bounds);
-
-    if (result.success) {
-      console.log('BrowserView created successfully');
-      isLoading.value = true;
-    } else {
-      hasError.value = true;
-      errorMessage.value = result.message || 'Failed to create web view';
+    // Ignore errors for favicons and other non-critical resources
+    if (event.errorCode === -3 && event.validatedURL && event.validatedURL.includes('favicon')) {
+      console.log('Ignoring favicon load error');
+      return;
     }
-  } catch (error) {
-    console.error('Error creating BrowserView:', error);
-    hasError.value = true;
-    errorMessage.value = error.message || 'Failed to create web view';
-  }
+
+    console.error('Webview load error:', event);
+
+    // Only show error for main frame failures
+    if (event.isMainFrame) {
+      hasError.value = true;
+      errorMessage.value = event.errorDescription || 'Failed to load page';
+      errorDetails.value = {
+        errorCode: event.errorCode,
+        url: event.validatedURL
+      };
+      isLoading.value = false;
+    }
+  });
+
+  // Find in page results
+  webview.addEventListener('found-in-page', (event) => {
+    if (event.result.matches > 0) {
+      findResults.value = {
+        activeMatchOrdinal: event.result.activeMatchOrdinal,
+        matches: event.result.matches
+      };
+    } else {
+      findResults.value = null;
+    }
+  });
+
+  // New window requests (open in default browser)
+  webview.addEventListener('new-window', (event) => {
+    console.log('New window requested:', event.url);
+    // Let Electron handle opening in default browser
+  });
+
+  console.log('Webview listeners setup complete');
 };
 
 // Navigation methods
-const reload = async () => {
-  try {
-    hasError.value = false;
-    errorMessage.value = null;
-    errorDetails.value = null;
-    isLoading.value = true;
-    await api.webview.reload();
-  } catch (error) {
-    console.error('Error reloading:', error);
-    hasError.value = true;
-    errorMessage.value = error.message;
+const reload = () => {
+  if (!webviewElement.value) return;
+
+  hasError.value = false;
+  errorMessage.value = null;
+  errorDetails.value = null;
+  isLoading.value = true;
+  webviewElement.value.reload();
+};
+
+const goHome = () => {
+  if (!webviewElement.value) return;
+
+  hasError.value = false;
+  errorMessage.value = null;
+  errorDetails.value = null;
+  isLoading.value = true;
+  currentUrl.value = 'https://www.zztakeoff.com/login';
+  webviewElement.value.loadURL(currentUrl.value);
+};
+
+const goBack = () => {
+  if (!webviewElement.value) return;
+
+  if (webviewElement.value.canGoBack()) {
+    webviewElement.value.goBack();
   }
 };
 
-const goHome = async () => {
-  try {
-    hasError.value = false;
-    errorMessage.value = null;
-    errorDetails.value = null;
-    isLoading.value = true;
-    currentUrl.value = 'https://www.zztakeoff.com/login';
-    await api.webview.navigate(currentUrl.value);
-  } catch (error) {
-    console.error('Error navigating home:', error);
-    hasError.value = true;
-    errorMessage.value = error.message;
-  }
-};
+const goForward = () => {
+  if (!webviewElement.value) return;
 
-const goBack = async () => {
-  try {
-    const result = await api.webview.goBack();
-    if (result.success) {
-      canGoBack.value = result.canGoBack !== false;
-    }
-  } catch (error) {
-    console.error('Error going back:', error);
-  }
-};
-
-const goForward = async () => {
-  try {
-    const result = await api.webview.goForward();
-    if (result.success) {
-      canGoForward.value = result.canGoForward !== false;
-    }
-  } catch (error) {
-    console.error('Error going forward:', error);
+  if (webviewElement.value.canGoForward()) {
+    webviewElement.value.goForward();
   }
 };
 
@@ -397,16 +410,11 @@ const goBackToLastTab = async () => {
 
   // Navigate to the last selected tab
   await router.push(lastTabPath.value);
-
-  // Keep maximized state when going back to the tab
-  // (isMaximized stays true, the other tab will handle it)
 };
 
 const selectTabAndGoBack = async (tab) => {
-  // Close the dropdown and restore BrowserView bounds
+  // Close the dropdown
   showTabDropdown.value = false;
-  await nextTick();
-  handleResize();
 
   // Save the selected tab to preferences
   lastTabPath.value = tab.path;
@@ -415,11 +423,8 @@ const selectTabAndGoBack = async (tab) => {
   // Mark that we're navigating via dropdown
   navigatingViaDropdown.value = true;
 
-  // Navigate to the selected tab and keep it maximized
+  // Navigate to the selected tab
   await router.push(tab.path);
-
-  // Keep maximized state
-  // (isMaximized stays true for the selected tab)
 };
 
 const saveLastActiveTab = async () => {
@@ -433,8 +438,7 @@ const saveLastActiveTab = async () => {
 
 // Find in Page functions
 const toggleFindBar = async () => {
-  console.log('[Find] Toggle find bar clicked, current state:', showFindBar.value);
-  console.log('[Find] WebView available:', !!api.webview);
+  console.log('[Find] Toggle find bar clicked');
 
   showFindBar.value = !showFindBar.value;
 
@@ -447,128 +451,46 @@ const toggleFindBar = async () => {
     }
   } else {
     // Stop find when closing
-    if (api.webview && api.webview.stopFindInPage) {
-      try {
-        await api.webview.stopFindInPage('clearSelection');
-        console.log('[Find] Stopped find in page');
-      } catch (error) {
-        console.error('[Find] Error stopping find:', error);
-      }
+    if (webviewElement.value) {
+      webviewElement.value.stopFindInPage('clearSelection');
+      console.log('[Find] Stopped find in page');
     }
     findText.value = '';
     findResults.value = null;
   }
 };
 
-const handleFindInput = async () => {
-  console.log('[Find] Input changed:', findText.value);
+const handleFindInput = () => {
+  if (!webviewElement.value) return;
 
   if (!findText.value) {
     findResults.value = null;
-    if (api.webview && api.webview.stopFindInPage) {
-      try {
-        await api.webview.stopFindInPage('clearSelection');
-      } catch (error) {
-        console.error('[Find] Error clearing selection:', error);
-      }
-    }
+    webviewElement.value.stopFindInPage('clearSelection');
     return;
   }
 
   // Perform find with default options
-  if (api.webview && api.webview.findInPage) {
-    try {
-      console.log('[Find] Searching for:', findText.value);
-      const result = await api.webview.findInPage(findText.value, { findNext: false });
-      console.log('[Find] Search result:', result);
-    } catch (error) {
-      console.error('[Find] Error finding in page:', error);
-    }
-  } else {
-    console.warn('[Find] WebView or findInPage not available');
-  }
+  console.log('[Find] Searching for:', findText.value);
+  webviewElement.value.findInPage(findText.value);
 };
 
-const findNext = async () => {
-  if (!findText.value) return;
+const findNext = () => {
+  if (!webviewElement.value || !findText.value) return;
 
-  if (api.webview && api.webview.findInPage) {
-    try {
-      console.log('[Find] Finding next:', findText.value);
-      await api.webview.findInPage(findText.value, { findNext: true, forward: true });
-    } catch (error) {
-      console.error('[Find] Error finding next:', error);
-    }
-  } else {
-    console.warn('[Find] WebView or findInPage not available');
-  }
+  console.log('[Find] Finding next');
+  webviewElement.value.findInPage(findText.value, { forward: true, findNext: true });
 };
 
-const findPrevious = async () => {
-  if (!findText.value) return;
+const findPrevious = () => {
+  if (!webviewElement.value || !findText.value) return;
 
-  if (api.webview && api.webview.findInPage) {
-    try {
-      console.log('[Find] Finding previous:', findText.value);
-      await api.webview.findInPage(findText.value, { findNext: true, forward: false });
-    } catch (error) {
-      console.error('[Find] Error finding previous:', error);
-    }
-  } else {
-    console.warn('[Find] WebView or findInPage not available');
-  }
-};
-
-const handleFoundInPage = (result) => {
-  findResults.value = {
-    activeMatchOrdinal: result.activeMatchOrdinal,
-    matches: result.matches
-  };
+  console.log('[Find] Finding previous');
+  webviewElement.value.findInPage(findText.value, { forward: false, findNext: true });
 };
 
 const toggleMaximize = () => {
   isMaximized.value = !isMaximized.value;
-  // Recalculate and update bounds after maximize state changes
-  nextTick(() => {
-    handleResize();
-  });
 };
-
-// Event handlers
-const handleLoadingChange = (loading) => {
-  isLoading.value = loading;
-  console.log('Loading state changed:', loading);
-};
-
-const handleUrlChange = (url) => {
-  currentUrl.value = url;
-  console.log('URL changed:', url);
-};
-
-const handleLoadError = (error) => {
-  console.error('Load error:', error);
-  hasError.value = true;
-  errorMessage.value = error.errorDescription || 'Failed to load page';
-  errorDetails.value = error;
-  isLoading.value = false;
-};
-
-// Handle window resize
-const handleResize = () => {
-  const bounds = calculateBounds();
-  if (bounds && api.webview) {
-    api.webview.setBounds(bounds);
-  }
-};
-
-// Watch for maximize state changes to update bounds
-watch(isMaximized, async () => {
-  // Wait for DOM to update, then recalculate bounds
-  await nextTick();
-  setTimeout(() => {
-    handleResize();
-  }, 100);
-});
 
 // Track navigation TO this component to save the previous tab
 watch(() => router.currentRoute.value.path, async (newPath, oldPath) => {
@@ -585,6 +507,8 @@ watch(() => router.currentRoute.value.path, async (newPath, oldPath) => {
 
 // Setup and cleanup
 onMounted(async () => {
+  console.log('ZzTakeoffWebTab mounted - setting up webview');
+
   // Load last active tab from preferences
   let shouldAutoMaximize = false;
   try {
@@ -599,52 +523,26 @@ onMounted(async () => {
       }
     }
   } catch (error) {
-    console.error('Error loading last active tab:', error);
+    console.error('Error loading preferences:', error);
   }
 
-  // Set up event listeners
-  if (api.webview) {
-    api.webview.onLoading(handleLoadingChange);
-    api.webview.onUrlChanged(handleUrlChange);
-    api.webview.onLoadError(handleLoadError);
-    api.webview.onFoundInPage(handleFoundInPage);
-  }
-
-  // Create BrowserView
-  await createWebView();
+  // Set up webview element event listeners
+  await nextTick();
+  setupWebviewListeners();
 
   // Auto-maximize webview if preference is enabled OR if parent set maximize state
   if (shouldAutoMaximize || isMaximized.value) {
     console.log('Auto-maximizing webview based on:', shouldAutoMaximize ? 'openExpanded preference' : 'parent maximize state');
     if (!isMaximized.value) {
       toggleMaximize();
-    } else {
-      // If already set to true by parent (e.g., SendToZzTakeoffModal), just update bounds
-      await nextTick();
-      handleResize();
     }
   }
-
-  // Listen for window resize
-  window.addEventListener('resize', handleResize);
 });
 
-onUnmounted(async () => {
+onUnmounted(() => {
+  console.log('ZzTakeoffWebTab unmounted');
   // Don't reset maximize state on unmount - let App.vue control the maximize state
   // This allows navigation between tabs via dropdown while staying maximized
-
-  // Remove resize listener
-  window.removeEventListener('resize', handleResize);
-
-  // Destroy BrowserView
-  if (api.webview) {
-    try {
-      await api.webview.destroy();
-      console.log('BrowserView destroyed');
-    } catch (error) {
-      console.error('Error destroying BrowserView:', error);
-    }
-  }
 });
 </script>
 
@@ -674,6 +572,16 @@ onUnmounted(async () => {
 .webview-container {
   background-color: #ffffff;
   min-height: 200px;
+}
+
+.webview-element {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  visibility: visible;
 }
 
 /* Dropdown overlay */
