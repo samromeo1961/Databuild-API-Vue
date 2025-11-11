@@ -25,12 +25,12 @@ function getDefaultPreferences() {
       customFolders: []
     },
     defaultTakeoffTypes: {
-      area: 'Area',
-      linear: 'Linear',
-      count: 'Count',
-      segment: 'Segment',
-      part: 'Item',
-      dragDrop: 'Item'
+      area: 'area',
+      linear: 'linear',
+      count: 'count',
+      segment: 'segment',
+      part: 'item',
+      dragDrop: 'item'
     },
     unitTakeoffMappings: {
       // Default unit to zzType mappings

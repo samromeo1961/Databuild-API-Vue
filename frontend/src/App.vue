@@ -371,6 +371,13 @@ onMounted(async () => {
     });
   }
 
+  // Listen for show-preferences event from Electron menu
+  if (window.electronAPI?.onShowPreferences) {
+    window.electronAPI.onShowPreferences(() => {
+      showPreferences();
+    });
+  }
+
   // Listen for preferences updated event
   window.addEventListener('preferencesUpdated', (event) => {
     const updatedPreferences = event.detail;

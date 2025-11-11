@@ -173,5 +173,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Event listeners
   onShowHelp: (callback) => ipcRenderer.on('show-help', callback),
-  onNavigateTo: (callback) => ipcRenderer.on('navigate-to', (event, path) => callback(path))
+  onNavigateTo: (callback) => ipcRenderer.on('navigate-to', (event, path) => callback(path)),
+  onShowPreferences: (callback) => ipcRenderer.on('show-preferences', callback)
 });

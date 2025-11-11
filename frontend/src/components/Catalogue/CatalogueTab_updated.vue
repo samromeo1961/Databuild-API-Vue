@@ -125,6 +125,7 @@
         @grid-ready="onGridReady"
         @selection-changed="onSelectionChanged"
         @sort-changed="onSortChanged"
+        @cell-value-changed="onCellValueChanged"
         @column-resized="onColumnResized"
         @column-moved="onColumnMoved"
         @column-visible="onColumnVisible"
@@ -407,6 +408,16 @@ const columnDefs = ref([
     hide: false
   },
   {
+    field: 'zzType',
+    headerName: 'zzType',
+    width: 120,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: true,
+    cellEditor: 'agTextCellEditor',
+    hide: false
+  },
+  {
     field: 'Recipe',
     headerName: 'Recipe',
     width: 90,
@@ -489,7 +500,30 @@ const loadData = async () => {
     const response = await api.catalogue.getItems(params);
 
     if (response?.success) {
-      rowData.value = response.data || [];
+      const catalogueData = response.data || [];
+
+      // Load zzTypes from store (user overrides)
+      const zzTypesResponse = await api.zzTypeStore.getAll();
+      const zzTypes = zzTypesResponse?.success ? zzTypesResponse.types || {} : {};
+
+      // Load preferences to get unit mappings
+      const preferencesResponse = await api.preferencesStore.get();
+      const unitMappings = preferencesResponse?.success && preferencesResponse.data?.unitTakeoffMappings
+        ? preferencesResponse.data.unitTakeoffMappings
+        : {};
+
+      // Merge zzTypes with catalogue data
+      // Priority: 1. Saved zzType override, 2. Unit mapping from preferences, 3. Empty
+      rowData.value = catalogueData.map(item => {
+        const savedZzType = zzTypes[item.ItemCode];
+        const mappedZzType = item.Unit ? unitMappings[item.Unit] : null;
+
+        return {
+          ...item,
+          zzType: savedZzType || mappedZzType || ''
+        };
+      });
+
       totalSize.value = response.total || response.data?.length || 0;
     } else {
       error.value = 'Failed to load catalogue items';
@@ -571,6 +605,38 @@ const onSortChanged = () => {
       sortOrder.value = 'asc';
     }
     loadData();
+  }
+};
+
+// Cell value changed handler (for zzType editing)
+const onCellValueChanged = async (event) => {
+  const { data, colDef, newValue, oldValue } = event;
+  const field = colDef.field;
+
+  // Only handle zzType changes
+  if (field !== 'zzType' || newValue === oldValue) return;
+
+  try {
+    console.log('[zzType] Saving:', data.ItemCode, '→', newValue);
+
+    // Save zzType to electron-store
+    const result = await api.zzTypeStore.set(data.ItemCode, newValue.toLowerCase());
+
+    if (result && result.success) {
+      success.value = 'zzType updated successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to update zzType';
+      setTimeout(() => error.value = null, 3000);
+      // Revert the change
+      event.node.setDataValue(field, oldValue);
+    }
+  } catch (err) {
+    console.error('Error saving zzType:', err);
+    error.value = 'Error saving zzType';
+    setTimeout(() => error.value = null, 3000);
+    // Revert the change
+    event.node.setDataValue(field, oldValue);
   }
 };
 

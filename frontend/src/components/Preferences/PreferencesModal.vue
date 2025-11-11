@@ -563,12 +563,12 @@ const preferences = ref({
     customFolders: []
   },
   defaultTakeoffTypes: {
-    area: 'DBxArea',
-    linear: 'DBxLinear',
-    count: 'DBxCount',
-    segment: 'DBxSegment',
-    part: 'DBxPart',
-    dragDrop: 'DBxD&D'
+    area: 'area',
+    linear: 'linear',
+    count: 'count',
+    segment: 'segment',
+    part: 'item',
+    dragDrop: 'item'
   },
   unitTakeoffMappings: {},
   itemsPerPage: 50,
@@ -595,6 +595,7 @@ const costCentreBanks = ref([]);
 const supplierGroups = ref([]);
 const loadingOptions = ref(false);
 const originalDatabase = ref(null);
+const initialDatabase = ref(null); // Track initial value when modal opens
 
 // Show modal
 const show = () => {
@@ -635,6 +636,8 @@ const loadPreferences = async () => {
     const response = await api.preferencesStore.get();
     if (response?.success && response.data) {
       preferences.value = response.data;
+      // Capture initial database value when modal opens
+      initialDatabase.value = response.data.defaultSystemDatabase;
     }
   } catch (err) {
     error.value = 'Failed to load preferences';
@@ -765,10 +768,10 @@ const handleSave = async () => {
   error.value = null;
 
   try {
-    // Check if database has changed
-    const databaseChanged = originalDatabase.value &&
+    // Check if database has changed from initial value (when modal opened)
+    const databaseChanged = initialDatabase.value &&
                           preferences.value.defaultSystemDatabase &&
-                          originalDatabase.value !== preferences.value.defaultSystemDatabase;
+                          initialDatabase.value !== preferences.value.defaultSystemDatabase;
 
     if (databaseChanged) {
       // Validate the database is valid before switching
@@ -789,8 +792,9 @@ const handleSave = async () => {
         return;
       }
 
-      // Update original database reference
+      // Update original and initial database references
       originalDatabase.value = preferences.value.defaultSystemDatabase;
+      initialDatabase.value = preferences.value.defaultSystemDatabase;
 
       // Reload options from new database
       await loadOptions();
@@ -803,9 +807,6 @@ const handleSave = async () => {
     const response = await api.preferencesStore.save(plainPreferences);
     if (response?.success) {
       success.value = true;
-      setTimeout(() => {
-        success.value = false;
-      }, 3000);
 
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent('preferencesUpdated', {
@@ -818,6 +819,14 @@ const handleSave = async () => {
           detail: { database: preferences.value.defaultSystemDatabase }
         }));
       }
+
+      // Close the modal after successful save
+      setTimeout(() => {
+        success.value = false;
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+      }, 1000);
     } else {
       error.value = 'Failed to save preferences';
     }

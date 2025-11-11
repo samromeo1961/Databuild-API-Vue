@@ -253,6 +253,16 @@ function createMainWindow() {
               mainWindow.webContents.send('navigate-to', '/zztakeoff-web');
             }
           }
+        },
+        { type: 'separator' },
+        {
+          label: 'Preferences',
+          accelerator: 'Ctrl+P',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('show-preferences');
+            }
+          }
         }
       ]
     },
