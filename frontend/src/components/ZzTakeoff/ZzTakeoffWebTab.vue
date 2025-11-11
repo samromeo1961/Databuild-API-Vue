@@ -195,7 +195,7 @@
         class="webview-element"
         partition="persist:zztakeoff"
         allowpopups
-        webpreferences="contextIsolation=true,sandbox=false"
+        webpreferences="nodeIntegration=no,contextIsolation=yes,sandbox=no,webSecurity=yes"
       ></webview>
 
       <!-- Grey overlay when dropdown is open -->
@@ -288,16 +288,47 @@ const setupWebviewListeners = () => {
 
   const webview = webviewElement.value;
 
+  // Log webview element details for debugging
+  console.log('[Webview] Element details:', {
+    tagName: webview.tagName,
+    offsetWidth: webview.offsetWidth,
+    offsetHeight: webview.offsetHeight,
+    src: webview.src,
+    partition: webview.partition
+  });
+
+  // DOM ready event - fires when webview is initialized and ready
+  webview.addEventListener('dom-ready', () => {
+    console.log('[Webview] DOM ready - webview initialized');
+    console.log('[Webview] Can execute code in webview now');
+
+    // Open devtools for the webview in development (optional)
+    if (window.location.protocol === 'http:') {
+      console.log('[Webview] Dev mode - opening devtools');
+      webview.openDevTools();
+    }
+  });
+
   // Loading events
   webview.addEventListener('did-start-loading', () => {
     isLoading.value = true;
     hasError.value = false;
-    console.log('Webview started loading');
+    console.log('[Webview] Started loading');
   });
 
   webview.addEventListener('did-stop-loading', () => {
     isLoading.value = false;
-    console.log('Webview stopped loading');
+    console.log('[Webview] Stopped loading');
+  });
+
+  webview.addEventListener('did-finish-load', () => {
+    console.log('[Webview] Finished loading - content should be visible now');
+    console.log('[Webview] Current dimensions:', {
+      width: webview.offsetWidth,
+      height: webview.offsetHeight,
+      clientWidth: webview.clientWidth,
+      clientHeight: webview.clientHeight
+    });
   });
 
   // Navigation events
@@ -305,12 +336,12 @@ const setupWebviewListeners = () => {
     currentUrl.value = event.url;
     canGoBack.value = webview.canGoBack();
     canGoForward.value = webview.canGoForward();
-    console.log('Webview navigated to:', event.url);
+    console.log('[Webview] Navigated to:', event.url);
   });
 
   webview.addEventListener('did-navigate-in-page', (event) => {
     currentUrl.value = event.url;
-    console.log('Webview navigated in-page to:', event.url);
+    console.log('[Webview] Navigated in-page to:', event.url);
   });
 
   // Error handling
@@ -355,11 +386,35 @@ const setupWebviewListeners = () => {
 
   // New window requests (open in default browser)
   webview.addEventListener('new-window', (event) => {
-    console.log('New window requested:', event.url);
+    console.log('[Webview] New window requested:', event.url);
     // Let Electron handle opening in default browser
   });
 
-  console.log('Webview listeners setup complete');
+  // Console messages from within the webview
+  webview.addEventListener('console-message', (event) => {
+    console.log(`[Webview Console] [${event.level}] Line ${event.line}:`, event.message);
+  });
+
+  // Capture crashed or unresponsive webview
+  webview.addEventListener('crashed', () => {
+    console.error('[Webview] CRASHED - webview process crashed');
+    hasError.value = true;
+    errorMessage.value = 'The webview process has crashed';
+  });
+
+  webview.addEventListener('gpu-crashed', () => {
+    console.error('[Webview] GPU CRASHED');
+  });
+
+  webview.addEventListener('plugin-crashed', () => {
+    console.error('[Webview] PLUGIN CRASHED');
+  });
+
+  webview.addEventListener('destroyed', () => {
+    console.log('[Webview] Webview was destroyed');
+  });
+
+  console.log('[Webview] All listeners setup complete');
 };
 
 // Navigation methods
@@ -580,8 +635,10 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   left: 0;
-  display: flex;
-  visibility: visible;
+  display: block;
+  border: none;
+  outline: none;
+  background-color: #fff;
 }
 
 /* Dropdown overlay */
