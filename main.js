@@ -7,8 +7,9 @@ const packageJson = require('./package.json');
 // Electron Configuration & Diagnostics
 // ============================================================
 
-// Disable hardware acceleration to fix GPU/rendering issues
-app.disableHardwareAcceleration();
+// NOTE: Hardware acceleration is REQUIRED for BrowserView to work
+// Disabling it causes ERR_ABORTED errors when loading external sites
+// app.disableHardwareAcceleration(); // DISABLED - breaks BrowserView
 
 // Disable disk cache to fix Windows permissions errors
 app.commandLine.appendSwitch('disk-cache-size', '0');
