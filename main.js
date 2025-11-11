@@ -104,15 +104,17 @@ function createMainWindow() {
   console.log('🚀 createMainWindow() function called');
 
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: 1920,
+    height: 1080,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webviewTag: true // Enable <webview> tag for zzTakeoff integration
+      webviewTag: true, // Enable <webview> tag for zzTakeoff integration
+      offscreen: false // Ensure onscreen rendering for BrowserView
     },
-    icon: path.join(__dirname, 'assets', 'icon.png')
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    show: false // Don't show until ready to avoid flash
   });
 
   // Create application menu
@@ -331,6 +333,8 @@ function createMainWindow() {
   // Log load success/failure
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('✓ Page loaded successfully');
+    // Show window after content is loaded
+    mainWindow.show();
   });
 
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -615,7 +619,10 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
         partition: 'persist:zztakeoff', // Persistent session storage
         webSecurity: true,
         enableRemoteModule: false,
-        backgroundThrottling: false
+        backgroundThrottling: false,
+        offscreen: false, // Ensure onscreen rendering
+        enableWebSQL: false,
+        v8CacheOptions: 'none' // Disable V8 code caching for production debugging
       }
     };
 
@@ -635,10 +642,23 @@ ipcMain.handle('webview:create', async (event, url, bounds) => {
     console.log('BrowserView webContents ID:', webView.webContents.id);
     console.log('BrowserViews in window:', mainWindow.getBrowserViews().length);
 
+    // Force visibility settings
+    if (webView.webContents) {
+      webView.webContents.setBackgroundThrottling(false);
+      // Ensure painting is enabled
+      if (!webView.webContents.isPainting()) {
+        console.log('[WARNING] WebContents is not painting! Forcing paint...');
+        webView.webContents.invalidate();
+      }
+    }
+
     // Load URL (only for first-time creation)
     console.log('Loading URL in BrowserView:', url);
     await webView.webContents.loadURL(url);
     console.log('URL loaded in BrowserView');
+
+    // Force paint after load
+    webView.webContents.invalidate();
 
     // Force webContents to be visible and bring to front
     webView.webContents.focus();
