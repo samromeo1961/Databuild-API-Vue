@@ -123,8 +123,8 @@ async function getSuppliersList(event, params) {
         S.AccountMobile,
         S.Archived,
         SG.GroupName AS SupplierGroupName
-      FROM [T_Esys].[dbo].[Supplier] S
-      LEFT JOIN [T_Esys].[dbo].[SupplierGroup] SG ON S.SuppGroup = SG.GroupNumber
+      FROM Supplier S
+      LEFT JOIN SupplierGroup SG ON S.SuppGroup = SG.GroupNumber
       ${whereClause}
       ORDER BY S.Supplier_Code
       OFFSET @offset ROWS
@@ -140,7 +140,7 @@ async function getSuppliersList(event, params) {
     // Count query
     const countQuery = `
       SELECT COUNT(*) AS total
-      FROM [T_Esys].[dbo].[Supplier] S
+      FROM Supplier S
       ${whereClause}
     `;
 
@@ -213,7 +213,7 @@ async function archiveSupplier(event, params) {
     }
 
     const query = `
-      UPDATE [T_Esys].[dbo].[Supplier]
+      UPDATE Supplier
       SET Archived = @archived
       WHERE Supplier_Code = @supplierCode
     `;
@@ -261,7 +261,7 @@ async function updateSupplierGroup(event, params) {
     }
 
     const query = `
-      UPDATE [T_Esys].[dbo].[Supplier]
+      UPDATE Supplier
       SET SuppGroup = @suppGroup
       WHERE Supplier_Code = @supplierCode
     `;
