@@ -24,33 +24,34 @@ async function searchJob(jobNumber, defaultZzType, dbConfig) {
     const perCodesTable = qualifyTable('PerCodes', dbConfig);
 
     // Query job items with cross-database join
+    // Note: Using COALESCE for column name variations common in Databuild
     const query = `
       SELECT
-        b.ItemCode,
-        b.CostCentre,
+        COALESCE(b.ItemCode, b.Code, '') AS ItemCode,
+        COALESCE(b.CostCentre, b.CC, '') AS CostCentre,
         cc.Name AS CostCentreName,
         cc.SubGroup,
-        b.Quantity,
-        b.UnitPrice,
-        b.LineNumber,
+        COALESCE(b.Quantity, b.Qty, 1) AS Quantity,
+        COALESCE(b.UnitPrice, b.Price, 0) AS UnitPrice,
+        COALESCE(b.LineNumber, b.Line, 0) AS LineNumber,
         pl.Description,
         pc.Printout AS Unit,
         -- Quantity-based zzType logic
         CASE
-          WHEN b.Quantity = 1 THEN 'part'
+          WHEN COALESCE(b.Quantity, b.Qty, 1) = 1 THEN 'part'
           ELSE @defaultZzType
         END AS suggestedZzType
       FROM ${billTable} b
-      LEFT JOIN ${costCentresTable} cc ON b.CostCentre = cc.Code AND cc.Tier = 1
-      LEFT JOIN ${priceListTable} pl ON b.ItemCode = pl.PriceCode
+      LEFT JOIN ${costCentresTable} cc ON COALESCE(b.CostCentre, b.CC, '') = cc.Code AND cc.Tier = 1
+      LEFT JOIN ${priceListTable} pl ON COALESCE(b.ItemCode, b.Code, '') = pl.PriceCode
       LEFT JOIN ${perCodesTable} pc ON pl.PerCode = pc.Code
       WHERE b.JobNo = @jobNumber
-      ORDER BY b.LineNumber
+      ORDER BY COALESCE(b.LineNumber, b.Line, 0)
     `;
 
     const result = await pool.request()
       .input('jobNumber', jobNumber)
-      .input('defaultZzType', defaultZzType || 'trim')
+      .input('defaultZzType', defaultZzType || 'area')
       .query(query);
 
     return {
@@ -90,14 +91,14 @@ async function getJobSummary(jobNumber, dbConfig) {
     const query = `
       SELECT
         o.JobNo,
-        o.CCSortOrder,
-        o.Description,
+        COALESCE(o.CCSortOrder, 0) AS CCSortOrder,
+        COALESCE(o.Contract, o.Client, '') AS Description,
         COUNT(b.ItemCode) AS ItemCount,
         SUM(b.Quantity * b.UnitPrice) AS TotalValue
       FROM ${ordersTable} o
       LEFT JOIN ${billTable} b ON o.JobNo = b.JobNo
       WHERE o.JobNo = @jobNumber
-      GROUP BY o.JobNo, o.CCSortOrder, o.Description
+      GROUP BY o.JobNo, COALESCE(o.CCSortOrder, 0), COALESCE(o.Contract, o.Client, '')
     `;
 
     const result = await pool.request()
@@ -143,14 +144,15 @@ async function getJobsList(dbConfig) {
     const ordersTable = qualifyTable('Orders', dbConfig);
 
     // Get all jobs from Orders table
+    // Note: Using Contract as job description (common in Databuild)
     const query = `
       SELECT TOP 500
         JobNo,
-        Description,
-        CCSortOrder
+        COALESCE(Contract, Client, '') AS Description,
+        COALESCE(CCSortOrder, 0) AS CCSortOrder
       FROM ${ordersTable}
       WHERE JobNo IS NOT NULL
-      ORDER BY CCSortOrder DESC, JobNo DESC
+      ORDER BY COALESCE(CCSortOrder, 0) DESC, JobNo DESC
     `;
 
     const result = await pool.request().query(query);
