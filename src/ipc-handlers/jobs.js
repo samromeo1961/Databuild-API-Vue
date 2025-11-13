@@ -169,6 +169,77 @@ async function getJobsList(dbConfig) {
 }
 
 /**
+ * Get all tables in Job database (diagnostic)
+ *
+ * @param {Object} dbConfig - Database configuration
+ * @returns {Object} Result with table information
+ */
+async function getJobDatabaseTables(dbConfig) {
+  try {
+    const pool = db.getPool();
+    if (!pool) {
+      throw new Error('Database not connected');
+    }
+
+    const jobDatabase = dbConfig.jobDatabase || dbConfig.database;
+
+    // Get all tables
+    const tablesQuery = `
+      SELECT
+        TABLE_NAME,
+        TABLE_TYPE
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_CATALOG = @database
+        AND TABLE_TYPE = 'BASE TABLE'
+      ORDER BY TABLE_NAME
+    `;
+
+    const tablesResult = await pool.request()
+      .input('database', jobDatabase)
+      .query(tablesQuery);
+
+    // For each table, get column count and sample columns
+    const tables = [];
+    for (const table of tablesResult.recordset) {
+      const columnsQuery = `
+        SELECT
+          COLUMN_NAME,
+          DATA_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = @tableName
+          AND TABLE_CATALOG = @database
+        ORDER BY ORDINAL_POSITION
+      `;
+
+      const columnsResult = await pool.request()
+        .input('database', jobDatabase)
+        .input('tableName', table.TABLE_NAME)
+        .query(columnsQuery);
+
+      tables.push({
+        tableName: table.TABLE_NAME,
+        columnCount: columnsResult.recordset.length,
+        columns: columnsResult.recordset.map(c => `${c.COLUMN_NAME} (${c.DATA_TYPE})`)
+      });
+    }
+
+    return {
+      success: true,
+      database: jobDatabase,
+      data: tables
+    };
+
+  } catch (error) {
+    console.error('Error getting job database tables:', error);
+    return {
+      success: false,
+      message: error.message,
+      data: []
+    };
+  }
+}
+
+/**
  * Get column information for Orders table (diagnostic)
  *
  * @param {Object} dbConfig - Database configuration
@@ -217,5 +288,6 @@ module.exports = {
   searchJob,
   getJobSummary,
   getJobsList,
-  getOrdersColumns
+  getOrdersColumns,
+  getJobDatabaseTables
 };

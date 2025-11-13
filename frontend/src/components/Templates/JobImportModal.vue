@@ -236,21 +236,33 @@ export default {
     const loadJobsList = async () => {
       loadingJobs.value = true;
       try {
-        // Diagnostic: Check what columns exist in Orders table
-        const columnsResult = await api.jobs.getOrdersColumns();
-        if (columnsResult.success) {
-          console.log('📊 Orders table columns:', columnsResult.data);
+        // Diagnostic: Get all tables in Job database
+        const tablesResult = await api.jobs.getDatabaseTables();
+        if (tablesResult.success) {
+          console.log('🗄️ Job Database Tables:', tablesResult.database);
+          console.table(tablesResult.data);
+
+          // Look for tables with "Job" or "Order" in the name
+          const relevantTables = tablesResult.data.filter(t =>
+            t.tableName.toLowerCase().includes('job') ||
+            t.tableName.toLowerCase().includes('order') ||
+            t.tableName.toLowerCase().includes('bill')
+          );
+
+          if (relevantTables.length > 0) {
+            console.log('📋 Relevant tables for jobs:', relevantTables);
+          }
         }
 
         const result = await api.jobs.getList();
         if (result.success && result.data) {
           jobsList.value = result.data;
         } else {
-          console.error('Failed to load jobs list:', result.message);
+          console.error('❌ Failed to load jobs list:', result.message);
           jobsList.value = [];
         }
       } catch (err) {
-        console.error('Error loading jobs list:', err);
+        console.error('❌ Error loading jobs list:', err);
         jobsList.value = [];
       } finally {
         loadingJobs.value = false;
