@@ -439,7 +439,7 @@ const sendToZzTakeoff = async () => {
           unit: {
             value: item.units
           },
-          'Cost Each': {
+          'cost each': {
             value: item.costEach.toString()
           },
           'cost centre': {

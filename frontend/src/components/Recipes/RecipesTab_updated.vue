@@ -396,10 +396,12 @@ import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { Modal } from 'bootstrap';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { useColumnNames } from '../../composables/useColumnNames';
 import SearchableSelect from '../common/SearchableSelect.vue';
 import draggable from 'vuedraggable';
 
 const api = useElectronAPI();
+const columnNamesComposable = useColumnNames();
 const router = useRouter();
 const theme = inject('theme');
 
@@ -454,7 +456,15 @@ const rowSelectionConfig = {
   isRowSelectable: (params) => !params.data.isChild
 };
 
-// Custom expand button cell renderer
+/**
+ * Custom expand button cell renderer for AG Grid
+ * Displays a chevron button to expand/collapse recipe sub-items
+ * @param {Object} params - AG Grid cell renderer params
+ * @param {Object} params.data - Row data containing recipe information
+ * @param {boolean} params.data.isChild - True if row is a sub-item
+ * @param {string} params.data.PriceCode - Recipe price code
+ * @returns {string} HTML string for expand/collapse button or empty string for child rows
+ */
 const ExpandButtonRenderer = (params) => {
   if (params.data.isChild) {
     return '';
@@ -468,7 +478,16 @@ const ExpandButtonRenderer = (params) => {
   </button>`;
 };
 
-// Actions cell renderer
+/**
+ * Actions cell renderer for AG Grid
+ * Displays action buttons (Send to zzTakeoff, Add to Favourites, Add to Template, Archive)
+ * Only shown for parent recipe rows, not sub-items
+ * @param {Object} params - AG Grid cell renderer params
+ * @param {Object} params.data - Row data
+ * @param {boolean} params.data.isChild - True if row is a sub-item
+ * @param {boolean|number} params.data.Archived - Archive status (1/true = archived, 0/false = active)
+ * @returns {string} HTML string for action buttons or empty string for child rows
+ */
 const ActionsRenderer = (params) => {
   if (params.data.isChild) return '';
 
@@ -898,7 +917,11 @@ const onRowDoubleClicked = (event) => {
   }
 };
 
-// Open column management modal
+/**
+ * Open the column management modal
+ * Populates the modal with current grid column state including visibility, pinning, and width
+ * Excludes AG Grid's internal selection checkbox column from management
+ */
 const openColumnPanel = () => {
   if (!gridApi.value) return;
 
@@ -1036,7 +1059,13 @@ const handleRenameColumn = async () => {
   }
 };
 
-// Toggle expand/collapse
+/**
+ * Toggle expand/collapse for a recipe to show/hide its sub-items (ingredients)
+ * Fetches sub-items from the database on first expand and caches them for subsequent toggles
+ * @param {string} priceCode - The recipe's price code
+ * @async
+ * @returns {Promise<void>}
+ */
 const toggleExpand = async (priceCode) => {
   if (expandedRecipes.value.has(priceCode)) {
     // Collapse
@@ -1066,7 +1095,18 @@ const toggleExpand = async (priceCode) => {
 // Debounce timer
 let searchDebounce = null;
 
-// Load data
+/**
+ * Load recipe data from the database with filtering
+ * Fetches all recipes, then resolves zzType for each based on:
+ * 1. Explicit zzType override (from zzTypeStore)
+ * 2. Unit-to-zzType mapping (from preferences)
+ * 3. Default 'count' if no mapping
+ *
+ * Note: Uses limit 999999 to load all data for client-side AG Grid pagination
+ * @param {boolean} resetPage - If true, resets AG Grid pagination to first page
+ * @async
+ * @returns {Promise<void>}
+ */
 const loadData = async (resetPage = false) => {
   loading.value = true;
   error.value = null;
@@ -1275,7 +1315,7 @@ const onGridReady = (params) => {
     } else if (action === 'template') {
       handleAddToTemplate([event.data]);
     } else if (action === 'zztakeoff') {
-      handleSendToZzTakeoff([event.data]);
+      handleSendToZzTakeoff(event.data);
     }
   });
 
@@ -1596,7 +1636,25 @@ const handleUnarchiveRecipe = async (item) => {
   }
 };
 
-// Send to zzTakeoff
+/**
+ * Send recipe item to zzTakeoff window
+ * Opens zzTakeoff window if not already open, then executes JavaScript to:
+ * 1. Navigate to the Takeoff tab (using Router.go)
+ * 2. Open the takeoff dialog with item properties (using startTakeoffWithProperties)
+ *
+ * Item properties are mapped using custom column names from columnNamesComposable
+ * zzType is determined from: override > unit mapping > default 'count'
+ *
+ * @param {Object} item - Recipe item to send
+ * @param {string} item.PriceCode - Item price code
+ * @param {string} item.Description - Item description
+ * @param {string} item.Unit - Unit of measure
+ * @param {number} item.LatestPrice - Latest price
+ * @param {string} item.CostCentre - Cost centre code
+ * @param {string} item.zzType - zzTakeoff type (area/linear/segment/count)
+ * @async
+ * @returns {Promise<void>}
+ */
 const handleSendToZzTakeoff = async (item) => {
   try {
     console.log('[zzTakeoff] Sending recipe to zzTakeoff:', item);
@@ -1621,6 +1679,10 @@ const handleSendToZzTakeoff = async (item) => {
     // Focus window without navigating
     await api.zzTakeoffWindow.open();
 
+    // Generate properties using custom column names
+    const fieldsToSend = ['Description', 'PriceCode', 'Unit', 'LatestPrice', 'CostCentre'];
+    const customProperties = columnNamesComposable.getZzTakeoffProperties(item, fieldsToSend);
+
     // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
       (function() {
@@ -1639,13 +1701,7 @@ const handleSendToZzTakeoff = async (item) => {
 
           startTakeoffWithProperties({
             type: ${JSON.stringify(item.zzType || 'count')},
-            properties: {
-              name: { value: ${JSON.stringify(item.Description || '')} },
-              sku: { value: ${JSON.stringify(item.PriceCode || '')} },
-              unit: { value: ${JSON.stringify(item.Unit || '')} },
-              'Cost Each': { value: ${JSON.stringify(item.LatestPrice ? item.LatestPrice.toString() : '0')} },
-              'cost centre': { value: ${JSON.stringify(item.CostCentre || '')} }
-            }
+            properties: ${JSON.stringify(customProperties)}
           });
 
           return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
@@ -1808,10 +1864,25 @@ const loadPageSize = async () => {
   }
 };
 
+// Apply custom column names to columnDefs
+const applyCustomColumnNames = () => {
+  const updatedColumnDefs = columnNamesComposable.applyColumnNames(columnDefs.value);
+  columnDefs.value = updatedColumnDefs;
+
+  // Refresh grid headers if grid is ready
+  if (gridApi.value) {
+    gridApi.value.refreshHeader();
+  }
+};
+
 // Listen for preferences updates
-onMounted(() => {
+onMounted(async () => {
   loadPageSize();
   loadCostCentres(); // Load the cost centres dropdown
+
+  // Load custom column names
+  await columnNamesComposable.loadColumnNames();
+  applyCustomColumnNames();
 
   // Initialize rename modal
   if (renameModalRef.value) {
@@ -1836,6 +1907,16 @@ onMounted(() => {
         gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
+    }
+  });
+
+  // Listen for column name updates
+  window.addEventListener('columnNamesUpdated', async () => {
+    await columnNamesComposable.loadColumnNames();
+    applyCustomColumnNames();
+    // Reload data to refresh the grid
+    if (gridApi.value) {
+      loadData();
     }
   });
 });

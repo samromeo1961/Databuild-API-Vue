@@ -287,11 +287,13 @@ import { ref, computed, onMounted, watch, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { useColumnNames } from '../../composables/useColumnNames';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
 import SearchableSelect from '../common/SearchableSelect.vue';
 
 const api = useElectronAPI();
+const columnNamesComposable = useColumnNames();
 const router = useRouter();
 const theme = inject('theme');
 
@@ -480,7 +482,17 @@ const defaultColDef = {
 // Debounce timer
 let searchDebounce = null;
 
-// Load data
+/**
+ * Load catalogue data from the database with pagination and filtering
+ * Fetches catalogue items, then resolves zzType for each based on:
+ * 1. Explicit zzType override (from zzTypeStore)
+ * 2. Unit-to-zzType mapping (from preferences)
+ * 3. Default 'count' if no mapping
+ *
+ * Uses server-side pagination with pageSize and offset
+ * @async
+ * @returns {Promise<void>}
+ */
 const loadData = async () => {
   loading.value = true;
   error.value = null;
@@ -705,6 +717,12 @@ const openColumnPanel = () => {
   }
 };
 
+/**
+ * Toggle visibility of a column in the AG Grid
+ * @param {Object} column - Column configuration object
+ * @param {string} column.field - Column field identifier
+ * @param {boolean} column.visible - Desired visibility state
+ */
 const toggleColumnVisibility = (column) => {
   if (!gridApi.value) return;
 
@@ -719,6 +737,11 @@ const toggleColumnVisibility = (column) => {
   saveColumnState();
 };
 
+/**
+ * Reorder columns in AG Grid based on managedColumns array order
+ * Called after drag-and-drop reordering in the column management modal
+ * Updates AG Grid column order and persists state to electron-store
+ */
 const onColumnReorder = () => {
   if (!gridApi.value) return;
 
@@ -735,6 +758,12 @@ const onColumnReorder = () => {
   saveColumnState();
 };
 
+/**
+ * Pin a column to left or right side of the grid
+ * @param {Object} column - Column configuration object
+ * @param {string} column.field - Column field identifier
+ * @param {string|null} position - Pin position: 'left', 'right', or null (unpinned)
+ */
 const pinColumn = (column, position) => {
   if (!gridApi.value) return;
 
@@ -908,6 +937,10 @@ const handleSendToZzTakeoff = async () => {
     // Focus window without navigating
     await api.zzTakeoffWindow.open();
 
+    // Generate properties using custom column names
+    const fieldsToSend = ['Description', 'ItemCode', 'Unit', 'LatestPrice', 'CostCentre'];
+    const customProperties = columnNamesComposable.getZzTakeoffProperties(item, fieldsToSend);
+
     // Execute BOTH Router.go AND startTakeoffWithProperties (Router.go FIRST)
     const jsCode = `
       (function() {
@@ -926,13 +959,7 @@ const handleSendToZzTakeoff = async () => {
 
           startTakeoffWithProperties({
             type: ${JSON.stringify(item.zzType || 'count')},
-            properties: {
-              name: { value: ${JSON.stringify(item.Description || '')} },
-              sku: { value: ${JSON.stringify(item.ItemCode || '')} },
-              unit: { value: ${JSON.stringify(item.Unit || '')} },
-              'Cost Each': { value: ${JSON.stringify(item.LatestPrice ? item.LatestPrice.toString() : '0')} },
-              'cost centre': { value: ${JSON.stringify(item.CostCentre || '')} }
-            }
+            properties: ${JSON.stringify(customProperties)}
           });
 
           return { success: true, note: 'Router.go() then startTakeoffWithProperties executed' };
@@ -1011,9 +1038,24 @@ const loadPageSize = async () => {
 };
 
 // Listen for preferences updates
-onMounted(() => {
+// Apply custom column names to columnDefs
+const applyCustomColumnNames = () => {
+  const updatedColumnDefs = columnNamesComposable.applyColumnNames(columnDefs.value);
+  columnDefs.value = updatedColumnDefs;
+
+  // Refresh grid headers if grid is ready
+  if (gridApi.value) {
+    gridApi.value.refreshHeader();
+  }
+};
+
+onMounted(async () => {
   loadPageSize();
   loadCostCentres();
+
+  // Load custom column names
+  await columnNamesComposable.loadColumnNames();
+  applyCustomColumnNames();
 
   // Initialize modals
   if (columnManagementModalRef.value) {
@@ -1031,6 +1073,16 @@ onMounted(() => {
         gridApi.value.setGridOption('paginationPageSize', pageSize.value);
         loadData();
       }
+    }
+  });
+
+  // Listen for column name updates
+  window.addEventListener('columnNamesUpdated', async () => {
+    await columnNamesComposable.loadColumnNames();
+    applyCustomColumnNames();
+    // Reload data to refresh the grid
+    if (gridApi.value) {
+      loadData();
     }
   });
 });

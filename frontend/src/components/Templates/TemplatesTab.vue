@@ -73,6 +73,13 @@
             <i class="bi bi-plus-square"></i>
           </button>
           <button
+            class="btn btn-outline-warning"
+            @click="handleImportFromJob"
+            title="Import from Job Database"
+          >
+            <i class="bi bi-folder-symlink"></i>
+          </button>
+          <button
             class="btn btn-outline-info"
             @click="handleImportCSV"
             :disabled="!selectedTemplate"
@@ -378,6 +385,12 @@
         </div>
       </div>
     </div>
+
+    <!-- Job Import Modal -->
+    <JobImportModal
+      ref="jobImportModalRef"
+      @template-imported="onTemplateImported"
+    />
 
     <!-- Add from Catalogue Modal -->
     <div
@@ -713,11 +726,14 @@
 import { ref, computed, onMounted, inject } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { useColumnNames } from '../../composables/useColumnNames';
 import { useRouter } from 'vue-router';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import JobImportModal from './JobImportModal.vue';
 
 const api = useElectronAPI();
+const columnNamesComposable = useColumnNames();
 const router = useRouter();
 const theme = inject('theme');
 const isMaximized = inject('webviewMaximized');
@@ -757,6 +773,9 @@ const catalogueItems = ref([]);
 const catalogueSelectedRows = ref([]);
 const catalogueGridApi = ref(null);
 const loadingCatalogue = ref(false);
+
+// Job Import Modal
+const jobImportModalRef = ref(null);
 let catalogueSearchDebounce = null;
 
 // Template Editor Modal
@@ -1719,6 +1738,31 @@ const handleAddFromCatalogue = async () => {
   await loadCatalogueItems();
 };
 
+// Handle Import from Job
+const handleImportFromJob = () => {
+  if (jobImportModalRef.value) {
+    jobImportModalRef.value.show();
+  }
+};
+
+// Handle template imported from job
+const onTemplateImported = (template) => {
+  // Refresh templates list
+  loadTemplates();
+
+  // Select the newly created template
+  if (template && template.id) {
+    selectedTemplateId.value = template.id;
+    onTemplateChange();
+  }
+
+  // Show success message
+  success.value = `Template "${template.templateName}" imported successfully from job!`;
+  setTimeout(() => {
+    success.value = null;
+  }, 5000);
+};
+
 // Handle Import from CSV
 const handleImportCSV = () => {
   if (!selectedTemplate.value) return;
@@ -2161,7 +2205,7 @@ const handleSendToZzTakeoff = async () => {
               unit: {
                 value: ${JSON.stringify(row.Unit || '')}
               },
-              'Cost Each': {
+              'cost each': {
                 value: ${JSON.stringify(row.Price ? row.Price.toString() : '0')}
               },
               'cost centre': {

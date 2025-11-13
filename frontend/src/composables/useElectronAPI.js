@@ -104,6 +104,13 @@ export function useElectronAPI() {
       updatePrices: (templateId, data) => window.electronAPI?.templates.updatePrices(templateId, data)
     },
 
+    // Jobs (Job Database operations)
+    jobs: {
+      searchJob: (jobNumber, defaultZzType) => window.electronAPI?.jobs.searchJob(jobNumber, defaultZzType),
+      getSummary: (jobNumber) => window.electronAPI?.jobs.getSummary(jobNumber),
+      getList: () => window.electronAPI?.jobs.getList()
+    },
+
     // Templates Store (electron-store persistence)
     templatesStore: {
       getList: (params) => window.electronAPI?.templatesStore.getList(params),
@@ -147,6 +154,16 @@ export function useElectronAPI() {
       delete: (tabName) => window.electronAPI?.filterState?.delete(tabName),
       getAll: () => window.electronAPI?.filterState?.getAll(),
       clearAll: () => window.electronAPI?.filterState?.clearAll()
+    },
+
+    // Column Names (electron-store persistence for custom column names)
+    columnNames: {
+      get: () => window.electronAPI?.columnNames?.get(),
+      save: (columnNames) => window.electronAPI?.columnNames?.save(columnNames),
+      update: (field, displayName, zzTakeoffProperty) => window.electronAPI?.columnNames?.update(field, displayName, zzTakeoffProperty),
+      reset: () => window.electronAPI?.columnNames?.reset(),
+      getDisplayName: (field) => window.electronAPI?.columnNames?.getDisplayName(field),
+      getZzTakeoffProperty: (field) => window.electronAPI?.columnNames?.getZzTakeoffProperty(field)
     },
 
     // zzType Store (electron-store persistence for item-specific zzType overrides)

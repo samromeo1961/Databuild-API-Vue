@@ -61,6 +61,7 @@ const columnStatesHandlers = require('./src/ipc-handlers/column-states');
 const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
 const filterStateHandlers = require('./src/ipc-handlers/filter-state');
 const columnNamesHandlers = require('./src/ipc-handlers/column-names');
+const jobsHandlers = require('./src/ipc-handlers/jobs');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
@@ -771,6 +772,25 @@ ipcMain.handle('column-names:get-zztakeoff-property', columnNamesHandlers.getZzT
 // ============================================================
 
 ipcMain.handle('templates:update-prices', templatesHandlers.updatePrices);
+
+// ============================================================
+// IPC Handlers for Jobs (Database Operations)
+// ============================================================
+
+ipcMain.handle('jobs:search-job', async (event, jobNumber, defaultZzType) => {
+  const savedConfig = store.get('dbConfig');
+  return await jobsHandlers.searchJob(jobNumber, defaultZzType, savedConfig);
+});
+
+ipcMain.handle('jobs:get-summary', async (event, jobNumber) => {
+  const savedConfig = store.get('dbConfig');
+  return await jobsHandlers.getJobSummary(jobNumber, savedConfig);
+});
+
+ipcMain.handle('jobs:get-list', async (event) => {
+  const savedConfig = store.get('dbConfig');
+  return await jobsHandlers.getJobsList(savedConfig);
+});
 
 // ============================================================
 // IPC Handlers for Templates Store (Persistent)

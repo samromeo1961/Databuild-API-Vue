@@ -507,6 +507,89 @@
               </div>
             </div>
 
+            <!-- Column Name Customization -->
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#columnNameSettings"
+                >
+                  <i class="bi bi-textarea-t me-2"></i>
+                  Column Name Customization
+                </button>
+              </h2>
+              <div id="columnNameSettings" class="accordion-collapse collapse" data-bs-parent="#preferencesAccordion">
+                <div class="accordion-body">
+                  <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <small>
+                      Customize column names displayed in tables and property names used when sending to zzTakeoff.
+                      Changes will apply across all tabs (Catalogue, Recipes, Templates, Favourites, Recents).
+                    </small>
+                  </div>
+
+                  <!-- Column Names Table -->
+                  <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                      <thead>
+                        <tr>
+                          <th style="width: 25%">Database Field</th>
+                          <th style="width: 35%">Display Name (Column Header)</th>
+                          <th style="width: 35%">zzTakeoff Property Name</th>
+                          <th style="width: 5%"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(columnData, field) in editableColumnNames" :key="field">
+                          <td class="align-middle">
+                            <code class="text-muted">{{ field }}</code>
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              class="form-control form-control-sm"
+                              v-model="columnData.displayName"
+                              :placeholder="field"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              class="form-control form-control-sm"
+                              v-model="columnData.zzTakeoffProperty"
+                              :placeholder="field.toLowerCase()"
+                            />
+                          </td>
+                          <td class="align-middle text-center">
+                            <button
+                              class="btn btn-sm btn-outline-secondary"
+                              @click="resetColumnName(field)"
+                              title="Reset to default"
+                            >
+                              <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button
+                      class="btn btn-sm btn-outline-secondary"
+                      @click="resetAllColumnNames"
+                    >
+                      <i class="bi bi-arrow-counterclockwise me-1"></i>
+                      Reset All to Defaults
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -544,8 +627,10 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Modal } from 'bootstrap';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import { useColumnNames } from '../../composables/useColumnNames';
 
 const api = useElectronAPI();
+const columnNamesComposable = useColumnNames();
 
 // Modal ref
 const modalRef = ref(null);
@@ -594,6 +679,10 @@ const databases = ref([]);
 const costCentreBanks = ref([]);
 const supplierGroups = ref([]);
 const loadingOptions = ref(false);
+
+// Column Names State
+const editableColumnNames = ref({});
+const defaultColumnNames = ref({});
 const originalDatabase = ref(null);
 const initialDatabase = ref(null); // Track initial value when modal opens
 
@@ -609,6 +698,7 @@ const show = () => {
 
     // Load fresh data when opening
     loadPreferences();
+    loadColumnNames();
     loadUnits();
     loadOptions();
     loadCurrentDatabase();
@@ -644,6 +734,42 @@ const loadPreferences = async () => {
     console.error('Error loading preferences:', err);
   } finally {
     loading.value = false;
+  }
+};
+
+// Load column names
+const loadColumnNames = async () => {
+  try {
+    await columnNamesComposable.loadColumnNames();
+    // Create a deep copy for editing
+    editableColumnNames.value = JSON.parse(JSON.stringify(columnNamesComposable.columnNames.value));
+    defaultColumnNames.value = JSON.parse(JSON.stringify(columnNamesComposable.columnNames.value));
+  } catch (err) {
+    console.error('Error loading column names:', err);
+    error.value = 'Failed to load column names';
+  }
+};
+
+// Reset a single column name to default
+const resetColumnName = (field) => {
+  if (defaultColumnNames.value[field]) {
+    editableColumnNames.value[field] = {
+      ...defaultColumnNames.value[field]
+    };
+  }
+};
+
+// Reset all column names to defaults
+const resetAllColumnNames = async () => {
+  try {
+    await columnNamesComposable.resetColumnNames();
+    editableColumnNames.value = JSON.parse(JSON.stringify(columnNamesComposable.columnNames.value));
+    defaultColumnNames.value = JSON.parse(JSON.stringify(columnNamesComposable.columnNames.value));
+    success.value = true;
+    setTimeout(() => success.value = false, 3000);
+  } catch (err) {
+    console.error('Error resetting column names:', err);
+    error.value = 'Failed to reset column names';
   }
 };
 
@@ -806,11 +932,20 @@ const handleSave = async () => {
     // Save preferences
     const response = await api.preferencesStore.save(plainPreferences);
     if (response?.success) {
+      // Save column names
+      const plainColumnNames = JSON.parse(JSON.stringify(editableColumnNames.value));
+      await columnNamesComposable.saveColumnNames(plainColumnNames);
+
       success.value = true;
 
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent('preferencesUpdated', {
         detail: plainPreferences
+      }));
+
+      // Dispatch event to notify tabs of column name changes
+      window.dispatchEvent(new CustomEvent('columnNamesUpdated', {
+        detail: plainColumnNames
       }));
 
       if (databaseChanged) {

@@ -723,7 +723,7 @@ const handleSendToZzTakeoff = async (item) => {
               unit: {
                 value: ${JSON.stringify(item.Unit || '')}
               },
-              'Cost Each': {
+              'cost each': {
                 value: ${JSON.stringify(item.Price ? item.Price.toString() : '0')}
               },
               'cost centre': {

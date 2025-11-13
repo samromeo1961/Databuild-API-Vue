@@ -99,6 +99,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updatePrices: (templateId, data) => ipcRenderer.invoke('templates:update-prices', data)
   },
 
+  // Jobs (Job Database operations)
+  jobs: {
+    searchJob: (jobNumber, defaultZzType) => ipcRenderer.invoke('jobs:search-job', jobNumber, defaultZzType),
+    getSummary: (jobNumber) => ipcRenderer.invoke('jobs:get-summary', jobNumber),
+    getList: () => ipcRenderer.invoke('jobs:get-list')
+  },
+
   // Templates Store (electron-store persistent storage)
   templatesStore: {
     getList: (params) => ipcRenderer.invoke('templates-store:get-list', params),
@@ -142,6 +149,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (tabName) => ipcRenderer.invoke('filter-state:delete', tabName),
     getAll: () => ipcRenderer.invoke('filter-state:get-all'),
     clearAll: () => ipcRenderer.invoke('filter-state:clear-all')
+  },
+
+  // Column Names (electron-store persistent storage for custom column names)
+  columnNames: {
+    get: () => ipcRenderer.invoke('column-names:get'),
+    save: (columnNames) => ipcRenderer.invoke('column-names:save', columnNames),
+    update: (field, displayName, zzTakeoffProperty) => ipcRenderer.invoke('column-names:update', { field, displayName, zzTakeoffProperty }),
+    reset: () => ipcRenderer.invoke('column-names:reset'),
+    getDisplayName: (field) => ipcRenderer.invoke('column-names:get-display-name', field),
+    getZzTakeoffProperty: (field) => ipcRenderer.invoke('column-names:get-zztakeoff-property', field)
   },
 
   // zzType Store (electron-store persistent storage for item-specific zzType overrides)

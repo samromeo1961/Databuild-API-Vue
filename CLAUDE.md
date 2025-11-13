@@ -474,3 +474,58 @@ External HTTPS calls are proxied through the main process:
 - App menu includes shortcuts: Ctrl+, (settings), Ctrl+R (reload), F12 (DevTools)
 - Application name in UI: "DBx Connector Vue"
 - Product name: "DBx Connector Vue" (Vue.js + AG Grid Edition)
+- When sending Properties to zzTakeoff thhey must always be in lower case
+- The underlying Data that The DBx Connector access is Part of an Estimating Program called Databuild. It has 3 Databases:\
+\
+1. is Called Common - which enable login to the Databuild Software (Not Needed in our Case)\
+2. is Called System Database - which can be Named anything by the Users eg. CROWNESYS where CROWNE is the shortname of the company ans SYS denotes the System Database. This is the One that the DBx Connector is using for Catalogue, Recipes, Suppliers and Contacts.\
+\
+There exists a third Database which is called the Job Database -  which houses the Job Related Data eg. CROWNEJOB where CROWNE is short name for Comapny and JOB denoting Job Database (as named by User). I am wanting to Target this table \
+\
+mporting Templates, as discussed before the Break we will need to connect to 2 Databases. I have sent you the CROWNEJOB database previously (which you need to restore on SQL instance.
+
+This is the sample SQL to query the CROWNEJOB database the Select Job 1447. I am setting all items in a Job that have a Quantity of 1 to a Part, whereas anything that has a number of either 0 or a quantity greater than 1 this will be set as the Default takeoff Type as per Preference setup. 
+\
+\
+WITH OrderDetailsRanked AS (
+    SELECT 
+        Code,
+        Description,
+        ROW_NUMBER() OVER (PARTITION BY Code ORDER BY (SELECT NULL)) AS RowNum
+    FROM 
+        [CROWNEJOB].[dbo].[OrderDetails]
+)
+SELECT 
+    b.ItemCode,
+    b.CostCentre,
+    cc.Name AS CostCentreName,  -- Added this line to get the Name from CostCentres
+    odr.Description,
+    b.XDescription AS Workup,
+    b.Quantity,
+    pc.Printout AS PerCode,
+    b.UnitPrice,
+    CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
+    b.LineNumber,
+    o.Supplier,
+    o.CCSortOrder
+FROM 
+    [CROWNEJOB].[dbo].[Bill] b
+LEFT JOIN
+    [CROWNEJOB].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
+LEFT JOIN
+    OrderDetailsRanked odr ON b.ItemCode = odr.Code AND odr.RowNum = 1
+LEFT JOIN
+    [CROWNESYS].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
+LEFT JOIN
+    [CROWNESYS].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
+LEFT JOIN
+    [CROWNESYS].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code  -- Added this join to get the Name from CostCentres
+WHERE 
+    b.JobNo LIKE '1447' AND cc.Tier =1
+ORDER BY 
+    o.CCSortOrder,b.CostCentre, b.LineNumber\
+\
+- Here is a sam[le script of a Job Database calle T_EJob\
+\
+c:\Users\User\Downloads\T_EJob.sql
+- The default zzType are area, linear, segment, Count
