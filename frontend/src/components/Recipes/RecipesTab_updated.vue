@@ -387,6 +387,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Notes Edit Modal -->
+    <NotesEditModal ref="notesEditModalRef" @note-saved="onNoteSaved" />
   </div>
 </template>
 
@@ -399,6 +402,7 @@ import { useElectronAPI } from '../../composables/useElectronAPI';
 import { useColumnNames } from '../../composables/useColumnNames';
 import SearchableSelect from '../common/SearchableSelect.vue';
 import draggable from 'vuedraggable';
+import NotesEditModal from '../common/NotesEditModal.vue';
 
 const api = useElectronAPI();
 const columnNamesComposable = useColumnNames();
@@ -441,6 +445,9 @@ const editingRecipe = ref({
   Description: '',
   SubItemCount: 0
 });
+
+// Notes Modal
+const notesEditModalRef = ref(null);
 
 // Check if dark mode
 const isDarkMode = computed(() => {
@@ -561,6 +568,27 @@ const columnDefs = ref([
         return { paddingLeft: '30px' };
       }
       return null;
+    }
+  },
+  {
+    field: 'notes',
+    headerName: 'Notes',
+    width: 300,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: false,
+    cellRenderer: (params) => {
+      // Don't show notes for child rows
+      if (params.data.isChild) return '';
+
+      const noteText = params.value || '';
+      const preview = noteText.length > 50 ? noteText.substring(0, 50) + '...' : noteText;
+      const displayText = noteText ? preview : '<i class="text-muted">Click to add notes...</i>';
+      return `<div class="notes-cell" style="cursor: pointer;" data-action="edit-note">${displayText}</div>`;
+    },
+    tooltipValueGetter: (params) => {
+      if (params.data.isChild) return null;
+      return params.value || 'Click to edit notes';
     }
   },
   {
@@ -1197,6 +1225,9 @@ const loadData = async (resetPage = false) => {
 
       console.log(`Loaded ${rowData.value.length} recipes. Total: ${totalSize.value}`);
 
+      // Load notes for all recipes
+      await loadNotesForRecipes();
+
       // Update filtered count after grid updates
       nextTick(() => {
         updateFilteredCount();
@@ -1222,6 +1253,73 @@ const loadCostCentres = async () => {
     }
   } catch (err) {
     console.error('Error loading cost centres:', err);
+  }
+};
+
+// Load notes for all recipes (from electron-store, already synced from Template) - BATCH OPERATION
+const loadNotesForRecipes = async () => {
+  if (!rowData.value || rowData.value.length === 0) return;
+
+  try {
+    // Get ALL notes in ONE call (much faster than individual gets!)
+    const notesResponse = await api.notesStore.getAll();
+    const allNotes = notesResponse?.success ? notesResponse.data : {};
+
+    // Merge notes into grid data
+    for (const recipe of rowData.value) {
+      if (recipe.PriceCode && allNotes[recipe.PriceCode]) {
+        recipe.notes = allNotes[recipe.PriceCode];
+      } else {
+        recipe.notes = '';
+      }
+    }
+
+    // Refresh grid to show notes
+    if (gridApi.value) {
+      gridApi.value.refreshCells({ force: true });
+    }
+  } catch (err) {
+    console.error('Error loading notes:', err);
+  }
+};
+
+// Handle edit note click
+const handleEditNote = (priceCode, currentNote) => {
+  if (notesEditModalRef.value) {
+    notesEditModalRef.value.show(priceCode, currentNote || '');
+  }
+};
+
+// Handle note saved
+const onNoteSaved = async (data) => {
+  try {
+    const { priceCode, note } = data;
+
+    // Save to notes-store
+    const result = await api.notesStore.save(priceCode, note);
+
+    if (result?.success) {
+      // Update the rowData
+      const recipe = rowData.value.find(row => row.PriceCode === priceCode);
+      if (recipe) {
+        recipe.notes = note;
+
+        // Refresh the grid
+        if (gridApi.value) {
+          gridApi.value.refreshCells({ force: true });
+        }
+      }
+
+      success.value = 'Note saved successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to save note';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error saving note:', err);
+    error.value = 'Error saving note';
+    setTimeout(() => error.value = null, 3000);
   }
 };
 
@@ -1339,6 +1437,21 @@ const onCellClicked = (event) => {
     data: event.data,
     value: event.value
   });
+
+  // Check if clicked element or its parent has data-action attribute
+  let target = event.event.target;
+  let action = target.dataset.action;
+
+  // If target doesn't have action, check parent (for icon clicks)
+  if (!action && target.parentElement) {
+    action = target.parentElement.dataset.action;
+  }
+
+  if (action === 'edit-note') {
+    console.log('[Actions] Edit note clicked');
+    handleEditNote(event.data.PriceCode, event.data.notes);
+    return;
+  }
 
   // For zzType column, try to start editing manually
   if (event.column.getColId() === 'zzType') {
@@ -1986,6 +2099,22 @@ watch(pageSize, () => {
 
 :deep(.ag-cell button:hover) {
   color: var(--link-color);
+}
+
+/* Notes cell styling */
+.notes-cell {
+  padding: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-cell:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+[data-theme="dark"] .notes-cell:hover {
+  background-color: rgba(13, 110, 253, 0.2);
 }
 
 /* Ensure grid fills container */

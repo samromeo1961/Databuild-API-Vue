@@ -279,6 +279,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Notes Edit Modal -->
+    <NotesEditModal ref="notesEditModalRef" @note-saved="onNoteSaved" />
   </div>
 </template>
 
@@ -291,6 +294,7 @@ import { useColumnNames } from '../../composables/useColumnNames';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
 import SearchableSelect from '../common/SearchableSelect.vue';
+import NotesEditModal from '../common/NotesEditModal.vue';
 
 const api = useElectronAPI();
 const columnNamesComposable = useColumnNames();
@@ -321,6 +325,9 @@ let renameColumnModal = null;
 const managedColumns = ref([]);
 const renameColumnField = ref('');
 const renameColumnName = ref('');
+
+// Notes Modal
+const notesEditModalRef = ref(null);
 
 // Check if dark mode
 const isDarkMode = computed(() => {
@@ -369,6 +376,22 @@ const columnDefs = ref([
     minWidth: 300,
     filter: 'agTextColumnFilter',
     sortable: true,
+    hide: false
+  },
+  {
+    field: 'notes',
+    headerName: 'Notes',
+    width: 300,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: false,
+    cellRenderer: (params) => {
+      const noteText = params.value || '';
+      const preview = noteText.length > 50 ? noteText.substring(0, 50) + '...' : noteText;
+      const displayText = noteText ? preview : '<i class="text-muted">Click to add notes...</i>';
+      return `<div class="notes-cell" style="cursor: pointer;" data-action="edit-note">${displayText}</div>`;
+    },
+    tooltipValueGetter: (params) => params.value || 'Click to edit notes',
     hide: false
   },
   {
@@ -544,6 +567,9 @@ const loadData = async () => {
       });
 
       totalSize.value = response.total || response.data?.length || 0;
+
+      // Load notes for all items
+      await loadNotesForItems();
     } else {
       error.value = 'Failed to load catalogue items';
     }
@@ -552,6 +578,135 @@ const loadData = async () => {
     error.value = 'Error loading catalogue items';
   } finally {
     loading.value = false;
+  }
+};
+
+// Sync ALL Template data from database to electron-store (one-time operation)
+const syncAllTemplatesToNotesStore = async () => {
+  try {
+    const syncKey = 'catalogue_templates_synced';
+    const lastSync = localStorage.getItem(syncKey);
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    // Only sync if not done in the last hour (or never synced)
+    if (lastSync && (now - parseInt(lastSync)) < ONE_HOUR) {
+      console.log('[Template Sync] Already synced recently, skipping');
+      return;
+    }
+
+    console.log('[Template Sync] Starting full Template data sync...');
+    const response = await api.catalogue.getAllTemplates();
+
+    if (response?.success && response.data) {
+      console.log(`[Template Sync] Syncing ${response.count} templates to notes-store`);
+
+      // Get all existing notes in ONE call (much faster!)
+      const existingNotesResponse = await api.notesStore.getAll();
+      const existingNotes = existingNotesResponse?.success ? existingNotesResponse.data : {};
+
+      let syncedCount = 0;
+      let skippedCount = 0;
+
+      // Batch sync all templates that don't have custom notes
+      for (const item of response.data) {
+        // Only sync if no custom note exists (don't overwrite user edits)
+        if (!existingNotes[item.PriceCode]) {
+          await api.notesStore.save(item.PriceCode, item.Template);
+          syncedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      // Mark as synced
+      localStorage.setItem(syncKey, now.toString());
+      console.log(`[Template Sync] Sync complete: ${syncedCount} synced, ${skippedCount} skipped (custom notes preserved)`);
+    }
+  } catch (err) {
+    console.error('[Template Sync] Error syncing templates:', err);
+  }
+};
+
+// Load notes for all items (from electron-store) - BATCH OPERATION
+const loadNotesForItems = async () => {
+  if (!rowData.value || rowData.value.length === 0) {
+    console.log('[LoadNotes] No rowData to load notes for');
+    return;
+  }
+
+  try {
+    console.log(`[LoadNotes] Loading notes for ${rowData.value.length} items`);
+
+    // Get ALL notes in ONE call (much faster than individual gets!)
+    const notesResponse = await api.notesStore.getAll();
+    const allNotes = notesResponse?.success ? notesResponse.data : {};
+
+    console.log(`[LoadNotes] Found ${Object.keys(allNotes).length} notes in store`);
+
+    let matchedCount = 0;
+    let emptyCount = 0;
+
+    // Merge notes into grid data
+    for (const item of rowData.value) {
+      if (item.ItemCode && allNotes[item.ItemCode]) {
+        item.notes = allNotes[item.ItemCode];
+        matchedCount++;
+      } else {
+        item.notes = '';
+        emptyCount++;
+      }
+    }
+
+    console.log(`[LoadNotes] Merged notes: ${matchedCount} with notes, ${emptyCount} without`);
+
+    // Refresh grid to show notes
+    if (gridApi.value) {
+      gridApi.value.setGridOption('rowData', rowData.value);
+      console.log('[LoadNotes] Grid refreshed with notes');
+    }
+  } catch (err) {
+    console.error('[LoadNotes] Error loading notes:', err);
+  }
+};
+
+// Handle edit note click
+const handleEditNote = (priceCode, currentNote) => {
+  if (notesEditModalRef.value) {
+    notesEditModalRef.value.show(priceCode, currentNote || '');
+  }
+};
+
+// Handle note saved
+const onNoteSaved = async (data) => {
+  try {
+    const { priceCode, note } = data;
+
+    // Save to notes-store
+    const result = await api.notesStore.save(priceCode, note);
+
+    if (result?.success) {
+      // Update the rowData
+      const item = rowData.value.find(row => row.ItemCode === priceCode);
+      if (item) {
+        item.notes = note;
+
+        // Refresh the grid
+        if (gridApi.value) {
+          gridApi.value.setGridOption('rowData', rowData.value);
+        }
+      }
+
+      success.value = 'Note saved successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to save note';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error saving note:', err);
+    error.value = 'Error saving note';
+    setTimeout(() => error.value = null, 3000);
   }
 };
 
@@ -612,6 +767,9 @@ const onGridReady = (params) => {
     } else if (action === 'zztakeoff') {
       console.log('[Actions] zzTakeoff button clicked');
       handleSendSingleItemToZzTakeoff(event.data);
+    } else if (action === 'edit-note') {
+      console.log('[Actions] Edit note clicked');
+      handleEditNote(event.data.ItemCode, event.data.notes);
     }
   });
 
@@ -1057,6 +1215,11 @@ onMounted(async () => {
   await columnNamesComposable.loadColumnNames();
   applyCustomColumnNames();
 
+  // Sync all Template data to notes-store (one-time operation) - AWAIT to ensure it completes before grid loads
+  console.log('[Catalogue] Starting Template sync...');
+  await syncAllTemplatesToNotesStore();
+  console.log('[Catalogue] Template sync finished');
+
   // Initialize modals
   if (columnManagementModalRef.value) {
     columnManagementModal = new Modal(columnManagementModalRef.value);
@@ -1120,6 +1283,22 @@ watch(pageSize, () => {
 .action-buttons .btn {
   padding: 2px 6px;
   font-size: 0.875rem;
+}
+
+/* Notes cell styling */
+.notes-cell {
+  padding: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-cell:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+[data-theme="dark"] .notes-cell:hover {
+  background-color: rgba(13, 110, 253, 0.2);
 }
 
 /* Dark mode AG Grid styles */

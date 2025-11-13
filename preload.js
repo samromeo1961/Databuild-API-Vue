@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getItem: (priceCode) => ipcRenderer.invoke('catalogue:get-item', priceCode),
     archiveItem: (params) => ipcRenderer.invoke('catalogue:archive-item', params),
     updateField: (params) => ipcRenderer.invoke('catalogue:update-field', params),
-    updatePrice: (params) => ipcRenderer.invoke('catalogue:update-price', params)
+    updatePrice: (params) => ipcRenderer.invoke('catalogue:update-price', params),
+    getAllTemplates: () => ipcRenderer.invoke('catalogue:get-all-templates')
   },
 
   // Recipes
@@ -133,6 +134,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add: (item) => ipcRenderer.invoke('recents-store:add', item),
     update: (updateData) => ipcRenderer.invoke('recents-store:update', updateData),
     clear: () => ipcRenderer.invoke('recents-store:clear')
+  },
+
+  // Notes Store (electron-store persistent storage, user-specific)
+  notesStore: {
+    getAll: () => ipcRenderer.invoke('notes-store:get-all'),
+    get: (priceCode) => ipcRenderer.invoke('notes-store:get', priceCode),
+    save: (priceCode, noteText) => ipcRenderer.invoke('notes-store:save', priceCode, noteText),
+    delete: (priceCode) => ipcRenderer.invoke('notes-store:delete', priceCode),
+    saveMultiple: (notesObj, merge) => ipcRenderer.invoke('notes-store:save-multiple', notesObj, merge),
+    clearAll: () => ipcRenderer.invoke('notes-store:clear-all'),
+    getCount: () => ipcRenderer.invoke('notes-store:get-count')
   },
 
   // Column States (electron-store persistent storage)

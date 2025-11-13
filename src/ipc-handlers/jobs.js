@@ -8,7 +8,7 @@ const { qualifyTable, getJobDatabase } = require('../database/query-builder');
  * @param {string} jobNumber - Job number to search
  * @param {string} defaultZzType - Default zzType for items with quantity ≠ 1
  * @param {Object} dbConfig - Database configuration
- * @returns {Object} Result with job items array
+ * @returns {Object} Result with job items array and job info
  */
 async function searchJob(jobNumber, defaultZzType, dbConfig) {
   try {
@@ -26,41 +26,80 @@ async function searchJob(jobNumber, defaultZzType, dbConfig) {
 
     // Build fully-qualified table names using query-builder
     const billTable = qualifyTable('Bill', dbConfig);
+    const ordersTable = qualifyTable('Orders', dbConfig);
+    const orderDetailsTable = qualifyTable('OrderDetails', dbConfig);
     const costCentresTable = qualifyTable('CostCentres', dbConfig);
     const priceListTable = qualifyTable('PriceList', dbConfig);
     const perCodesTable = qualifyTable('PerCodes', dbConfig);
+    const jobsTable = qualifyTable('Jobs', dbConfig);
+    const contactsTable = qualifyTable('Contacts', dbConfig);
 
     console.log('📊 Qualified table names:', {
       billTable,
+      ordersTable,
+      orderDetailsTable,
       costCentresTable,
       priceListTable,
-      perCodesTable
+      perCodesTable,
+      jobsTable,
+      contactsTable
     });
 
+    // First, get job info (Schedule Profile and Address)
+    const jobInfoQuery = `
+      SELECT
+        j.Job_No AS JobNo,
+        j.ScheduleProfile,
+        c.Address,
+        c.City
+      FROM ${jobsTable} j
+      LEFT JOIN ${contactsTable} c ON j.Job_No = c.Code
+      WHERE j.Job_No = @jobNumber
+    `;
+
+    const jobInfoResult = await pool.request()
+      .input('jobNumber', jobNumber)
+      .query(jobInfoQuery);
+
+    const jobInfo = jobInfoResult.recordset.length > 0 ? jobInfoResult.recordset[0] : null;
+
     // Query job items with cross-database join
-    // Bill table columns: JobNo, ItemCode, Quantity, UnitPrice, CostCentre, LineNumber
+    // Full query matching user's requirements with Orders, OrderDetails, and System DB tables
     const query = `
+      WITH OrderDetailsRanked AS (
+        SELECT
+          Code,
+          Description,
+          ROW_NUMBER() OVER (PARTITION BY Code ORDER BY (SELECT NULL)) AS RowNum
+        FROM ${orderDetailsTable}
+      )
       SELECT
         b.ItemCode,
         b.CostCentre,
         cc.Name AS CostCentreName,
         cc.SubGroup,
+        odr.Description,
+        b.XDescription AS Workup,
         b.Quantity,
-        b.UnitPrice,
-        b.LineNumber,
-        pl.Description,
         pc.Printout AS Unit,
+        b.UnitPrice,
+        CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
+        b.LineNumber,
+        o.Supplier,
+        o.CCSortOrder,
         -- Quantity-based zzType logic
         CASE
           WHEN b.Quantity = 1 THEN 'part'
           ELSE @defaultZzType
         END AS suggestedZzType
       FROM ${billTable} b
-      LEFT JOIN ${costCentresTable} cc ON b.CostCentre = cc.Code AND cc.Tier = 1
+      LEFT JOIN ${ordersTable} o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
+      LEFT JOIN OrderDetailsRanked odr ON b.ItemCode = odr.Code AND odr.RowNum = 1
       LEFT JOIN ${priceListTable} pl ON b.ItemCode = pl.PriceCode
       LEFT JOIN ${perCodesTable} pc ON pl.PerCode = pc.Code
+      LEFT JOIN ${costCentresTable} cc ON b.CostCentre = cc.Code AND cc.Tier = 1
       WHERE b.JobNo = @jobNumber
-      ORDER BY b.LineNumber
+      ORDER BY ISNULL(o.CCSortOrder, 999999), b.CostCentre, b.LineNumber
     `;
 
     const result = await pool.request()
@@ -71,7 +110,8 @@ async function searchJob(jobNumber, defaultZzType, dbConfig) {
     return {
       success: true,
       data: result.recordset,
-      count: result.recordset.length
+      count: result.recordset.length,
+      jobInfo: jobInfo  // Include job info (ScheduleProfile, Address, City)
     };
 
   } catch (error) {
@@ -162,18 +202,32 @@ async function getJobsList(dbConfig) {
     });
 
     const ordersTable = qualifyTable('Orders', dbConfig);
-    console.log('📊 Orders table:', ordersTable);
+    const contactsTable = qualifyTable('Contacts', dbConfig);
 
-    // Get all jobs from Orders table
-    // Note: Orders table has 'Job' column (not 'JobNo')
+    console.log('📊 Qualified tables:', {
+      ordersTable,
+      contactsTable
+    });
+
+    // Get all unique jobs from Orders table with address from Contacts
+    // Cross-database JOIN: Orders (Job DB) with Contacts (System DB)
+    // Match: Orders.Job = Contacts.Code
+    // Filter: Only show jobs where Contact.Debtor = 1
     const query = `
-      SELECT TOP 500
-        Job AS JobNo,
-        COALESCE(OrderText, '') AS Description
-      FROM ${ordersTable}
-      WHERE Job IS NOT NULL
-      ORDER BY CCSortOrder DESC, Job DESC
+      SELECT DISTINCT TOP 500
+        o.Job AS JobNo,
+        c.Address,
+        c.City,
+        CAST(COALESCE(o.OrderText, '') AS NVARCHAR(MAX)) AS Description
+      FROM ${ordersTable} o
+      LEFT JOIN ${contactsTable} c ON o.Job = c.Code
+      WHERE o.Job IS NOT NULL
+        AND o.Job <> ''
+        AND c.Debtor = 1
+      ORDER BY o.Job DESC
     `;
+
+    console.log('🔍 Jobs query:', query);
 
     const result = await pool.request().query(query);
 

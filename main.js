@@ -62,6 +62,7 @@ const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
 const filterStateHandlers = require('./src/ipc-handlers/filter-state');
 const columnNamesHandlers = require('./src/ipc-handlers/column-names');
 const jobsHandlers = require('./src/ipc-handlers/jobs');
+const notesStoreHandlers = require('./src/ipc-handlers/notes-store');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
@@ -654,6 +655,7 @@ ipcMain.handle('catalogue:get-item', catalogueHandlers.getCatalogueItem);
 ipcMain.handle('catalogue:archive-item', catalogueHandlers.archiveItem);
 ipcMain.handle('catalogue:update-field', catalogueHandlers.updateField);
 ipcMain.handle('catalogue:update-price', catalogueHandlers.updatePrice);
+ipcMain.handle('catalogue:get-all-templates', catalogueHandlers.getAllTemplates);
 
 // ============================================================
 // IPC Handlers for Recipes
@@ -831,6 +833,18 @@ ipcMain.handle('recents-store:get-list', recentsStoreHandlers.handleGetRecents);
 ipcMain.handle('recents-store:add', recentsStoreHandlers.handleAddToRecents);
 ipcMain.handle('recents-store:update', recentsStoreHandlers.handleUpdateRecent);
 ipcMain.handle('recents-store:clear', recentsStoreHandlers.handleClearRecents);
+
+// ============================================================
+// IPC Handlers for Notes Store (Persistent, User-Specific)
+// ============================================================
+
+ipcMain.handle('notes-store:get-all', notesStoreHandlers.handleGetAllNotes);
+ipcMain.handle('notes-store:get', notesStoreHandlers.handleGetNote);
+ipcMain.handle('notes-store:save', notesStoreHandlers.handleSaveNote);
+ipcMain.handle('notes-store:delete', notesStoreHandlers.handleDeleteNote);
+ipcMain.handle('notes-store:save-multiple', notesStoreHandlers.handleSaveMultipleNotes);
+ipcMain.handle('notes-store:clear-all', notesStoreHandlers.handleClearAllNotes);
+ipcMain.handle('notes-store:get-count', notesStoreHandlers.handleGetNotesCount);
 
 // ============================================================
 // IPC Handlers for zzType Store (Persistent)

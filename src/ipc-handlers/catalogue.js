@@ -553,10 +553,48 @@ async function updatePrice(event, params) {
   }
 }
 
+/**
+ * Get all Template data for syncing to notes-store
+ * IPC Handler: 'catalogue:get-all-templates'
+ */
+async function getAllTemplates(event) {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    const query = `
+      SELECT
+        PriceCode,
+        Template
+      FROM PriceList
+      WHERE Template IS NOT NULL AND Template != ''
+    `;
+
+    const result = await pool.request().query(query);
+
+    return {
+      success: true,
+      count: result.recordset.length,
+      data: result.recordset
+    };
+
+  } catch (err) {
+    console.error('Error fetching all templates:', err);
+    return {
+      success: false,
+      error: 'Failed to fetch templates',
+      message: err.message
+    };
+  }
+}
+
 module.exports = {
   getCatalogueItems,
   getCatalogueItem,
   archiveItem,
   updateField,
-  updatePrice
+  updatePrice,
+  getAllTemplates
 };

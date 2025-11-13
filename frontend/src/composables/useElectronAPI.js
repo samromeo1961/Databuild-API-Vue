@@ -26,7 +26,8 @@ export function useElectronAPI() {
       getItem: (priceCode) => window.electronAPI?.catalogue.getItem(priceCode),
       archiveItem: (params) => window.electronAPI?.catalogue.archiveItem(params),
       updateField: (params) => window.electronAPI?.catalogue.updateField(params),
-      updatePrice: (params) => window.electronAPI?.catalogue.updatePrice(params)
+      updatePrice: (params) => window.electronAPI?.catalogue.updatePrice(params),
+      getAllTemplates: () => window.electronAPI?.catalogue.getAllTemplates()
     },
 
     // Recipes
@@ -138,6 +139,17 @@ export function useElectronAPI() {
       add: (item) => window.electronAPI?.recentsStore.add(item),
       update: (updateData) => window.electronAPI?.recentsStore.update(updateData),
       clear: () => window.electronAPI?.recentsStore.clear()
+    },
+
+    // Notes Store (electron-store persistence, user-specific)
+    notesStore: {
+      getAll: () => window.electronAPI?.notesStore.getAll(),
+      get: (priceCode) => window.electronAPI?.notesStore.get(priceCode),
+      save: (priceCode, noteText) => window.electronAPI?.notesStore.save(priceCode, noteText),
+      delete: (priceCode) => window.electronAPI?.notesStore.delete(priceCode),
+      saveMultiple: (notesObj, merge) => window.electronAPI?.notesStore.saveMultiple(notesObj, merge),
+      clearAll: () => window.electronAPI?.notesStore.clearAll(),
+      getCount: () => window.electronAPI?.notesStore.getCount()
     },
 
     // Column States (electron-store persistence)

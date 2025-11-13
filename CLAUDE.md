@@ -65,25 +65,46 @@ npm run dist           # Electron builder package for Windows
 
 The main process manages:
 - Database connection lifecycle (SQL Server via mssql)
-- Two windows: settings window (database config) and main window (app UI)
+- Multiple windows: settings window (database config), main window (app UI), and zzTakeoff window
 - IPC handler registration for all frontend-backend communication
 - Application menu and keyboard shortcuts
 - electron-store configuration for persistent settings
 
 **Key Responsibilities:**
-1. On app launch, check for saved database config in electron-store
-2. If config exists, attempt connection; if fails, show settings window
-3. If no config, show settings window for initial setup
-4. Once connected, create main window and load Vue app
-5. Register all IPC handlers from `src/ipc-handlers/`
+1. On app launch, migrate old database config to Phase 2 schema (if needed)
+2. Check for saved database config in electron-store
+3. If config exists, attempt connection; if fails, show settings window
+4. If no config, show settings window for initial setup
+5. Once connected, create main window and load Vue app
+6. Register all IPC handlers from `src/ipc-handlers/`
 
 **Database Connection Flow:**
 ```
 app.whenReady()
+  → migrateDbConfig() (converts old schema to Phase 2)
   → Check electron-store for dbConfig
   → If exists: connect() → createMainWindow()
   → If not exists or fails: createSettingsWindow()
 ```
+
+### Databuild Database Architecture
+
+Databuild uses a **three-database architecture**:
+
+1. **Common Database** - User authentication (not used by DBx Connector)
+2. **System Database** - Core data (e.g., `CROWNESYS`, `T_Esys`)
+   - Contains: PriceList, CostCentres, Supplier, Recipe, Contacts, etc.
+   - Used for: Catalogue, Recipes, Suppliers, Contacts tabs
+3. **Job Database** - Project-specific data (e.g., `CROWNEJOB`, `T_EJob`)
+   - Contains: Bill, Orders, OrderDetails
+   - Used for: Templates tab (Job Import feature)
+
+**Phase 2 Implementation:**
+The app now supports **dual-database connectivity** (System + Job databases). The config is automatically migrated from Phase 1 format:
+- Phase 1: `{ database: "T_Esys" }`
+- Phase 2: `{ systemDatabase: "T_Esys", jobDatabase: "T_EJob" }` (or auto-detect)
+
+If `jobDatabase` is not specified, the app attempts to auto-detect it by replacing `SYS` suffix with `JOB` in the System Database name.
 
 ### IPC Architecture (Backend ↔ Frontend Communication)
 
@@ -114,47 +135,58 @@ app.whenReady()
 
 **Entry Point:** `frontend/src/main.js`
 
-**Router:** Vue Router with 9 tab-based routes (Catalogue, Recipes, Suppliers, Contacts, Templates, Favourites, Recents, zzTakeoff, Preferences)
+**Router:** Vue Router with 8 tab-based routes (Catalogue, Recipes, Suppliers, Contacts, Templates, Favourites, Recents, zzTakeoff Web)
 
 **Component Structure:**
 ```
 App.vue (root layout with tabs)
   ├── router-view (tab content)
-  │   ├── CatalogueTab.vue / CatalogueTab_updated.vue
-  │   ├── RecipesTab.vue / RecipesTab_updated.vue
-  │   ├── SuppliersTab.vue
-  │   ├── ContactsTab.vue
-  │   ├── TemplatesTab.vue
-  │   ├── FavouritesTab.vue
-  │   ├── RecentsTab.vue
-  │   ├── ZzTakeoffTab.vue
-  │   └── PreferencesTab.vue
+  │   ├── Catalogue/CatalogueTab_updated.vue
+  │   ├── Recipes/RecipesTab_updated.vue
+  │   ├── Suppliers/SuppliersTab.vue
+  │   ├── Contacts/ContactsTab.vue
+  │   ├── Templates/TemplatesTab.vue
+  │   ├── Favourites/FavouritesTab.vue
+  │   ├── Recents/RecentsTab.vue
+  │   └── ZzTakeoff/ZzTakeoffWebTab_Window.vue
   └── Common components:
-      ├── ColumnManager.vue
-      ├── SendToZzTakeoffModal.vue
-      └── ContactModal.vue
+      ├── common/ColumnManager.vue
+      ├── common/SendToZzTakeoffModal.vue
+      ├── common/SearchableSelect.vue
+      ├── common/SearchableMultiSelect.vue
+      ├── Contacts/ContactModal.vue
+      ├── Preferences/PreferencesModal.vue
+      ├── Templates/JobImportModal.vue
+      └── Help/HelpModal.vue
 ```
 
-**Note on _updated.vue files:** The codebase has two versions of some tabs (CatalogueTab.vue vs CatalogueTab_updated.vue, RecipesTab.vue vs RecipesTab_updated.vue). The `_updated` versions have enhanced column management features (show/hide, reorder, rename, persistence). Check `router/index.js` to see which version is active.
+**Note on _updated.vue files:** The codebase uses `_updated` versions for Catalogue and Recipes tabs with enhanced column management features (show/hide, reorder, rename, persistence). Check `router/index.js` to see which version is active.
 
 ### Database Layer
 
 **src/database/connection.js** - SQL Server connection pool management
 - Manages mssql connection pool lifecycle
-- `connect(dbConfig)` - Connect with credentials
-- `testConnection(dbConfig)` - Validate connection and Databuild schema
+- `connect(dbConfig)` - Connect with credentials (System Database)
+- `testConnection(dbConfig)` - Validate connection and Databuild schema (both System + Job databases)
 - `getPool()` - Get active pool for queries
+- `getJobDatabaseName(dbConfig)` - Auto-detect or retrieve Job Database name
 - `close()` - Close connections on shutdown
 
-**Databuild Schema Tables:**
+**Databuild System Database Tables:**
 - `PriceList` - Catalogue items and recipes
 - `CostCentres` - Cost centre hierarchy (Tier 1 = main level)
 - `Supplier` - Supplier records
 - `SupplierGroup` - Supplier categorization
 - `Recipe` - Recipe sub-items (ingredients)
 - `CCBanks` - Cost centre banks
-- `PriceCode` - Unit of measure mappings
+- `PerCodes` - Unit of measure mappings
 - `Contacts` - Contact records with groups
+- `Prices` - Price history
+
+**Databuild Job Database Tables:**
+- `Bill` - Job line items with quantities and prices
+- `Orders` - Job orders with supplier and cost centre sort order
+- `OrderDetails` - Order detail descriptions
 
 **Important SQL Query Pattern:**
 Use LEFT JOINs starting from PriceList to avoid filtering out items without matching cost centres. The Tier 1 filter should be in the JOIN ON condition, not WHERE clause.
@@ -170,13 +202,31 @@ INNER JOIN CostCentres CC ON PL.CostCentre = CC.Code
 WHERE CC.Tier = 1
 ```
 
+**Cross-Database Query Pattern (Job Database):**
+When querying Job Database tables that need to join with System Database tables, use fully qualified table names:
+
+```sql
+SELECT
+  b.ItemCode,
+  b.CostCentre,
+  cc.Name AS CostCentreName,
+  b.Quantity,
+  pc.Printout AS PerCode
+FROM [CROWNEJOB].[dbo].[Bill] b
+LEFT JOIN [CROWNESYS].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
+LEFT JOIN [CROWNESYS].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
+LEFT JOIN [CROWNESYS].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
+WHERE b.JobNo = '1447'
+```
+
 ### Database Schema Reference
 
-**Database Name:** Typically `T_Esys` or similar Databuild database
+**System Database Name:** Typically `T_Esys` or `[COMPANY]SYS` (e.g., `CROWNESYS`)
+**Job Database Name:** Typically `T_EJob` or `[COMPANY]JOB` (e.g., `CROWNEJOB`)
 
 **Core Tables Used in Application:**
 
-#### PriceList
+#### PriceList (System Database)
 Primary table for catalogue items and recipes. Key fields:
 - `PriceCode` (PK, nvarchar(30)) - Unique item identifier
 - `Description` (nvarchar(120)) - Item description
@@ -192,7 +242,7 @@ Primary table for catalogue items and recipes. Key fields:
 - `Hours` (float) - Labor hours
 - `Weight` (float) - Item weight
 
-#### CostCentres
+#### CostCentres (System Database)
 Hierarchical cost centre structure. Key fields:
 - `Code` (PK, nvarchar(10)) - Cost centre code
 - `Tier` (PK, nvarchar(8)) - Tier level (1 = main level, 2+ = sub-levels)
@@ -206,7 +256,7 @@ Hierarchical cost centre structure. Key fields:
 
 **Important:** Always filter for `Tier = 1` to get main cost centres. Use in JOIN condition, not WHERE clause.
 
-#### Recipe
+#### Recipe (System Database)
 Recipe ingredients/sub-items. Key fields:
 - `Counter` (PK, int, IDENTITY) - Auto-increment ID
 - `Main_Item` (nvarchar(30)) - Parent recipe PriceCode
@@ -217,7 +267,29 @@ Recipe ingredients/sub-items. Key fields:
 
 **Indexed on:** Main_Item (for efficient recipe expansion)
 
-#### Prices
+#### Bill (Job Database)
+Job line items with quantities and unit prices. Key fields:
+- `JobNo` (nvarchar(10)) - Job number
+- `ItemCode` (nvarchar(30)) - Links to PriceList.PriceCode
+- `CostCentre` (nvarchar(10)) - Cost centre code
+- `BLoad` (int) - Budget load number
+- `LineNumber` (int) - Line sequence number
+- `Quantity` (float) - Item quantity
+- `UnitPrice` (money) - Price per unit
+- `XDescription` (ntext) - Extended description (workup)
+
+#### Orders (Job Database)
+Job orders with supplier information. Key fields:
+- `OrderNumber` (nvarchar(50)) - Format: `JobNo/CostCentre.BLoad`
+- `Supplier` (nvarchar(8)) - Supplier code
+- `CCSortOrder` (int) - Cost centre sort order
+
+#### OrderDetails (Job Database)
+Order detail descriptions. Key fields:
+- `Code` (nvarchar(30)) - Item code
+- `Description` (nvarchar(120)) - Item description
+
+#### Prices (System Database)
 Price history for items. Key fields:
 - `Counter` (PK, int, IDENTITY) - Auto-increment ID
 - `PriceCode` (nvarchar(30)) - Links to PriceList.PriceCode
@@ -229,7 +301,7 @@ Price history for items. Key fields:
 
 **To get latest price:** Use MAX(Date) grouped by PriceCode and PriceLevel.
 
-#### PerCodes
+#### PerCodes (System Database)
 Unit of measure definitions. Key fields:
 - `Code` (PK, int) - Unit code
 - `Printout` (nvarchar(15)) - Display text (e.g., "m", "m²", "each")
@@ -238,7 +310,7 @@ Unit of measure definitions. Key fields:
 - `CalculationRoutine` (int) - Calculation method
 - `Rounding` (float) - Rounding precision
 
-#### Supplier
+#### Supplier (System Database)
 Supplier/subcontractor records. Key fields:
 - `Supplier_Code` (PK, nvarchar(8)) - Supplier unique code
 - `SupplierName` (nvarchar(96)) - Supplier name
@@ -254,13 +326,13 @@ Supplier/subcontractor records. Key fields:
 - `Archived` (bit) - Archived status
 - `OSC` (bit) - OSC integration flag
 
-#### SupplierGroup
+#### SupplierGroup (System Database)
 Supplier categorization. Key fields:
 - `GroupNumber` (PK, int) - Group ID
 - `GroupName` (nvarchar(20)) - Group name
 - `Lcolor` (int) - Label color
 
-#### Contacts
+#### Contacts (System Database)
 Contact records. Key fields:
 - `Code` (PK, nvarchar(8)) - Contact code
 - `Name` (nvarchar(96)) - Contact name
@@ -277,20 +349,20 @@ Contact records. Key fields:
 - `Debtor` (bit) - Is debtor flag
 - `Notes` (ntext) - Notes
 
-#### ContactGroup
+#### ContactGroup (System Database)
 Contact categorization. Key fields:
 - `Code` (PK, int) - Group code
 - `Name` (nvarchar(20)) - Group name
 - `Lcolor` (int) - Label color
 
-#### CCBanks
+#### CCBanks (System Database)
 Cost centre banks for budget tracking. Key fields:
 - `CCBankCode` (PK, nvarchar(8)) - Bank code
 - `CCBankName` (nvarchar(50)) - Bank name
 - `IncludeBudgets` (bit) - Include budgets flag
 - `IncludeOrders` (bit) - Include orders flag
 
-#### SuppliersPrices
+#### SuppliersPrices (System Database)
 Supplier-specific pricing. Key fields:
 - `Counter` (PK, int, IDENTITY) - Auto-increment ID
 - `Supplier` (nvarchar(9)) - Supplier code
@@ -344,6 +416,38 @@ WHERE R.Main_Item = @PriceCode
 ORDER BY R.Counter
 ```
 
+**Get Job Items for Template Import (Cross-Database):**
+```sql
+WITH OrderDetailsRanked AS (
+  SELECT
+    Code,
+    Description,
+    ROW_NUMBER() OVER (PARTITION BY Code ORDER BY (SELECT NULL)) AS RowNum
+  FROM [CROWNEJOB].[dbo].[OrderDetails]
+)
+SELECT
+  b.ItemCode,
+  b.CostCentre,
+  cc.Name AS CostCentreName,
+  odr.Description,
+  b.XDescription AS Workup,
+  b.Quantity,
+  pc.Printout AS PerCode,
+  b.UnitPrice,
+  CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
+  b.LineNumber,
+  o.Supplier,
+  o.CCSortOrder
+FROM [CROWNEJOB].[dbo].[Bill] b
+LEFT JOIN [CROWNEJOB].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
+LEFT JOIN OrderDetailsRanked odr ON b.ItemCode = odr.Code AND odr.RowNum = 1
+LEFT JOIN [CROWNESYS].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
+LEFT JOIN [CROWNESYS].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
+LEFT JOIN [CROWNESYS].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
+WHERE b.JobNo = '1447'
+ORDER BY o.CCSortOrder, b.CostCentre, b.LineNumber
+```
+
 ### Persistent Storage (electron-store)
 
 **Two types of storage:**
@@ -353,12 +457,15 @@ ORDER BY R.Counter
    - Stored in `~\AppData\Roaming\dbx-connector-vue\config.json`
 
 2. **Feature-level stores** - Managed in src/database/*-store.js
-   - `send-history.json` - History of items sent to zzTakeoff
-   - `preferences.json` - User preferences (theme, defaults)
+   - `history-db.json` - History of items sent to zzTakeoff
+   - `preferences.json` - User preferences (theme, defaults, zzType mappings)
    - `templates.json` - Saved templates
    - `favourites.json` - Favorited items
    - `recents.json` - Recently viewed items
    - `column-states.json` - Column configuration per tab (width, order, visibility, aliases)
+   - `column-names.json` - Custom column name mappings
+   - `filter-state.json` - Filter states per tab
+   - `zztype-store.json` - zzTakeoff type mappings
 
 Each store has:
 - Database layer: `src/database/[feature]-store.js`
@@ -426,6 +533,37 @@ External HTTPS calls are proxied through the main process:
 **Generic HTTP proxy:**
 `api.external.httpRequest(config)` accepts axios-compatible config for any external API.
 
+**Important:** When sending properties to zzTakeoff, they must always be in lowercase.
+
+### Working with Job Database (Phase 2)
+
+When implementing features that need to query the Job Database:
+
+1. **Get the Job Database name:**
+   ```javascript
+   const { getJobDatabaseName } = require('./src/database/connection');
+   const jobDbName = getJobDatabaseName(dbConfig);
+   ```
+
+2. **Use fully qualified table names in queries:**
+   ```sql
+   SELECT * FROM [${jobDbName}].[dbo].[Bill]
+   ```
+
+3. **Join across databases:**
+   ```sql
+   FROM [${jobDbName}].[dbo].[Bill] b
+   LEFT JOIN [${systemDbName}].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
+   ```
+
+4. **Handle Job Database unavailability:**
+   The Job Database is optional. Always check if it's available before querying:
+   ```javascript
+   if (!jobDbName) {
+     return { success: false, message: 'Job Database not configured' };
+   }
+   ```
+
 ## File Locations
 
 ### Backend (Electron Main Process)
@@ -441,6 +579,7 @@ External HTTPS calls are proxied through the main process:
 - `frontend/src/App.vue` - Root layout with tabs
 - `frontend/src/router/index.js` - Route definitions
 - `frontend/src/composables/useElectronAPI.js` - IPC access composable
+- `frontend/src/composables/useColumnNames.js` - Column name management
 - `frontend/src/components/**/*.vue` - Tab and modal components
 - `frontend/vite.config.js` - Vite configuration
 - `frontend/package.json` - Frontend dependencies
@@ -461,6 +600,7 @@ External HTTPS calls are proxied through the main process:
 - Failed connections show error dialog and reopen settings window
 - Connection pool is shared across all IPC handlers via `getPool()`
 - Connection closed gracefully on `before-quit` event
+- Old Phase 1 configs are automatically migrated to Phase 2 on startup
 
 ### Windows-Specific
 - Uses NSIS installer for Windows distribution
@@ -474,58 +614,8 @@ External HTTPS calls are proxied through the main process:
 - App menu includes shortcuts: Ctrl+, (settings), Ctrl+R (reload), F12 (DevTools)
 - Application name in UI: "DBx Connector Vue"
 - Product name: "DBx Connector Vue" (Vue.js + AG Grid Edition)
-- When sending Properties to zzTakeoff thhey must always be in lower case
-- The underlying Data that The DBx Connector access is Part of an Estimating Program called Databuild. It has 3 Databases:\
-\
-1. is Called Common - which enable login to the Databuild Software (Not Needed in our Case)\
-2. is Called System Database - which can be Named anything by the Users eg. CROWNESYS where CROWNE is the shortname of the company ans SYS denotes the System Database. This is the One that the DBx Connector is using for Catalogue, Recipes, Suppliers and Contacts.\
-\
-There exists a third Database which is called the Job Database -  which houses the Job Related Data eg. CROWNEJOB where CROWNE is short name for Comapny and JOB denoting Job Database (as named by User). I am wanting to Target this table \
-\
-mporting Templates, as discussed before the Break we will need to connect to 2 Databases. I have sent you the CROWNEJOB database previously (which you need to restore on SQL instance.
 
-This is the sample SQL to query the CROWNEJOB database the Select Job 1447. I am setting all items in a Job that have a Quantity of 1 to a Part, whereas anything that has a number of either 0 or a quantity greater than 1 this will be set as the Default takeoff Type as per Preference setup. 
-\
-\
-WITH OrderDetailsRanked AS (
-    SELECT 
-        Code,
-        Description,
-        ROW_NUMBER() OVER (PARTITION BY Code ORDER BY (SELECT NULL)) AS RowNum
-    FROM 
-        [CROWNEJOB].[dbo].[OrderDetails]
-)
-SELECT 
-    b.ItemCode,
-    b.CostCentre,
-    cc.Name AS CostCentreName,  -- Added this line to get the Name from CostCentres
-    odr.Description,
-    b.XDescription AS Workup,
-    b.Quantity,
-    pc.Printout AS PerCode,
-    b.UnitPrice,
-    CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
-    b.LineNumber,
-    o.Supplier,
-    o.CCSortOrder
-FROM 
-    [CROWNEJOB].[dbo].[Bill] b
-LEFT JOIN
-    [CROWNEJOB].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
-LEFT JOIN
-    OrderDetailsRanked odr ON b.ItemCode = odr.Code AND odr.RowNum = 1
-LEFT JOIN
-    [CROWNESYS].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
-LEFT JOIN
-    [CROWNESYS].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
-LEFT JOIN
-    [CROWNESYS].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code  -- Added this join to get the Name from CostCentres
-WHERE 
-    b.JobNo LIKE '1447' AND cc.Tier =1
-ORDER BY 
-    o.CCSortOrder,b.CostCentre, b.LineNumber\
-\
-- Here is a sam[le script of a Job Database calle T_EJob\
-\
-c:\Users\User\Downloads\T_EJob.sql
-- The default zzType are area, linear, segment, Count
+### zzTakeoff Integration
+- Default zzTakeoff types: `area`, `linear`, `segment`, `count`
+- Properties sent to zzTakeoff must be in lowercase
+- zzTakeoff quantity logic: Items with quantity of 1 are set as "Part", otherwise use default takeoff type from preferences

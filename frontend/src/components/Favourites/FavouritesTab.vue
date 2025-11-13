@@ -287,6 +287,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Notes Edit Modal -->
+    <NotesEditModal ref="notesEditModalRef" @note-saved="onNoteSaved" />
   </div>
 </template>
 
@@ -297,6 +300,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import NotesEditModal from '../common/NotesEditModal.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -327,6 +331,9 @@ const renameColumnModal = ref(null);
 let renameColumnModalInstance = null;
 const renameColumnField = ref('');
 const renameColumnName = ref('');
+
+// Notes Modal
+const notesEditModalRef = ref(null);
 
 // Check if dark mode
 const isDarkMode = computed(() => {
@@ -370,6 +377,21 @@ const columnDefs = ref([
     minWidth: 300,
     filter: 'agTextColumnFilter',
     sortable: true
+  },
+  {
+    field: 'notes',
+    headerName: 'Notes',
+    width: 300,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: false,
+    cellRenderer: (params) => {
+      const noteText = params.value || '';
+      const preview = noteText.length > 50 ? noteText.substring(0, 50) + '...' : noteText;
+      const displayText = noteText ? preview : '<i class="text-muted">Click to add notes...</i>';
+      return `<div class="notes-cell" style="cursor: pointer;" data-action="edit-note">${displayText}</div>`;
+    },
+    tooltipValueGetter: (params) => params.value || 'Click to edit notes'
   },
   {
     field: 'Unit',
@@ -530,6 +552,9 @@ const loadData = async () => {
     if (response?.success) {
       rowData.value = response.data || [];
       totalSize.value = rowData.value.length;
+
+      // Load notes for all items
+      await loadNotesForItems();
     } else {
       error.value = 'Failed to load favourites';
     }
@@ -538,6 +563,69 @@ const loadData = async () => {
     error.value = 'Error loading favourites';
   } finally {
     loading.value = false;
+  }
+};
+
+// Load notes for all items
+const loadNotesForItems = async () => {
+  if (!rowData.value || rowData.value.length === 0) return;
+
+  try {
+    for (const item of rowData.value) {
+      if (item.PriceCode) {
+        const noteResponse = await api.notesStore.get(item.PriceCode);
+        if (noteResponse?.success && noteResponse.note) {
+          item.notes = noteResponse.note;
+        }
+      }
+    }
+
+    // Refresh grid to show notes
+    if (gridApi.value) {
+      gridApi.value.refreshCells({ force: true });
+    }
+  } catch (err) {
+    console.error('Error loading notes:', err);
+  }
+};
+
+// Handle edit note click
+const handleEditNote = (priceCode, currentNote) => {
+  if (notesEditModalRef.value) {
+    notesEditModalRef.value.show(priceCode, currentNote || '');
+  }
+};
+
+// Handle note saved
+const onNoteSaved = async (data) => {
+  try {
+    const { priceCode, note } = data;
+
+    // Save to notes-store
+    const result = await api.notesStore.save(priceCode, note);
+
+    if (result?.success) {
+      // Update the rowData
+      const item = rowData.value.find(row => row.PriceCode === priceCode);
+      if (item) {
+        item.notes = note;
+
+        // Refresh the grid
+        if (gridApi.value) {
+          gridApi.value.refreshCells({ force: true });
+        }
+      }
+
+      success.value = 'Note saved successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to save note';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error saving note:', err);
+    error.value = 'Error saving note';
+    setTimeout(() => error.value = null, 3000);
   }
 };
 
@@ -560,6 +648,23 @@ const clearSearch = () => {
 // Grid ready handler
 const onGridReady = async (params) => {
   gridApi.value = params.api;
+
+  // Add click event listener for note clicks
+  params.api.addEventListener('cellClicked', (event) => {
+    let target = event.event.target;
+    let action = target.dataset.action;
+
+    // If target doesn't have action, check parent (for icon clicks)
+    if (!action && target.parentElement) {
+      action = target.parentElement.dataset.action;
+    }
+
+    if (action === 'edit-note') {
+      console.log('[Actions] Edit note clicked');
+      handleEditNote(event.data.PriceCode, event.data.notes);
+    }
+  });
+
   await loadColumnState();
   loadData();
 };
@@ -1049,6 +1154,22 @@ onMounted(() => {
   background-color: var(--bg-primary);
   border-color: var(--border-color);
   color: var(--text-primary);
+}
+
+/* Notes cell styling */
+.notes-cell {
+  padding: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-cell:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+[data-theme="dark"] .notes-cell:hover {
+  background-color: rgba(13, 110, 253, 0.2);
 }
 
 /* Ensure grid fills container */

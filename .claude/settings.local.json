@@ -16,7 +16,15 @@
       "Bash(findstr:*)",
       "Bash(git checkout:*)",
       "Bash(npm run dev:*)",
-      "Bash(cmd /c \"timeout /t 5 /nobreak\")"
+      "Bash(cmd /c \"timeout /t 5 /nobreak\")",
+      "Bash(cmd /c \"dir /b src\\ipc-handlers\")",
+      "Bash(cmd /c \"dir /b src\\database\")",
+      "Bash(cmd /c \"dir /b frontend\\src\\composables\" 2)",
+      "Bash(nul)",
+      "Bash(cmd /c \"dir /b src\\ipc-handlers\" 2)",
+      "Bash(cmd /c \"dir /b src\\database\" 2)",
+      "Bash(cmd /c \"timeout /t 2 /nobreak\")",
+      "Bash(npm run build-frontend:*)"
     ],
     "deny": [],
     "ask": []

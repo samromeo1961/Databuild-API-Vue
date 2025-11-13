@@ -257,6 +257,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Notes Edit Modal -->
+    <NotesEditModal ref="notesEditModalRef" @note-saved="onNoteSaved" />
   </div>
 </template>
 
@@ -267,6 +270,7 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { useElectronAPI } from '../../composables/useElectronAPI';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
+import NotesEditModal from '../common/NotesEditModal.vue';
 
 const api = useElectronAPI();
 const theme = inject('theme');
@@ -297,6 +301,9 @@ const renameColumnModal = ref(null);
 let renameColumnModalInstance = null;
 const renameColumnField = ref('');
 const renameColumnName = ref('');
+
+// Notes Modal
+const notesEditModalRef = ref(null);
 
 // Check if dark mode
 const isDarkMode = computed(() => {
@@ -340,6 +347,21 @@ const columnDefs = ref([
     minWidth: 300,
     filter: 'agTextColumnFilter',
     sortable: true
+  },
+  {
+    field: 'notes',
+    headerName: 'Notes',
+    width: 300,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: false,
+    cellRenderer: (params) => {
+      const noteText = params.value || '';
+      const preview = noteText.length > 50 ? noteText.substring(0, 50) + '...' : noteText;
+      const displayText = noteText ? preview : '<i class="text-muted">Click to add notes...</i>';
+      return `<div class="notes-cell" style="cursor: pointer;" data-action="edit-note">${displayText}</div>`;
+    },
+    tooltipValueGetter: (params) => params.value || 'Click to edit notes'
   },
   {
     field: 'Unit',
@@ -485,6 +507,9 @@ const loadData = async () => {
     if (response?.success) {
       rowData.value = response.data || [];
       totalSize.value = rowData.value.length;
+
+      // Load notes for all items
+      await loadNotesForItems();
     } else {
       error.value = 'Failed to load recents';
     }
@@ -493,6 +518,69 @@ const loadData = async () => {
     error.value = 'Error loading recents';
   } finally {
     loading.value = false;
+  }
+};
+
+// Load notes for all items
+const loadNotesForItems = async () => {
+  if (!rowData.value || rowData.value.length === 0) return;
+
+  try {
+    for (const item of rowData.value) {
+      if (item.PriceCode) {
+        const noteResponse = await api.notesStore.get(item.PriceCode);
+        if (noteResponse?.success && noteResponse.note) {
+          item.notes = noteResponse.note;
+        }
+      }
+    }
+
+    // Refresh grid to show notes
+    if (gridApi.value) {
+      gridApi.value.setGridOption('rowData', rowData.value);
+    }
+  } catch (err) {
+    console.error('Error loading notes:', err);
+  }
+};
+
+// Handle edit note click
+const handleEditNote = (priceCode, currentNote) => {
+  if (notesEditModalRef.value) {
+    notesEditModalRef.value.show(priceCode, currentNote || '');
+  }
+};
+
+// Handle note saved
+const onNoteSaved = async (data) => {
+  try {
+    const { priceCode, note } = data;
+
+    // Save to notes-store
+    const result = await api.notesStore.save(priceCode, note);
+
+    if (result?.success) {
+      // Update the rowData
+      const item = rowData.value.find(row => row.PriceCode === priceCode);
+      if (item) {
+        item.notes = note;
+
+        // Refresh the grid
+        if (gridApi.value) {
+          gridApi.value.setGridOption('rowData', rowData.value);
+        }
+      }
+
+      success.value = 'Note saved successfully';
+      setTimeout(() => success.value = null, 3000);
+    } else {
+      error.value = 'Failed to save note';
+      setTimeout(() => error.value = null, 3000);
+    }
+  } catch (err) {
+    console.error('Error saving note:', err);
+    error.value = 'Error saving note';
+    setTimeout(() => error.value = null, 3000);
   }
 };
 
@@ -517,6 +605,17 @@ const onGridReady = async (params) => {
   gridApi.value = params.api;
   await loadColumnState();
   loadData();
+
+  // Add click handler for notes cell
+  params.api.addEventListener('cellClicked', (event) => {
+    const target = event.event?.target;
+    if (target) {
+      const notesCell = target.closest('[data-action="edit-note"]');
+      if (notesCell && event.data) {
+        handleEditNote(event.data.PriceCode, event.data.notes);
+      }
+    }
+  });
 };
 
 // Selection changed handler
@@ -1007,5 +1106,23 @@ onMounted(() => {
 
 [data-theme="dark"] .custom-grid-footer .text-muted {
   color: var(--text-secondary) !important;
+}
+
+/* Notes cell styling */
+.notes-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.notes-cell:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+[data-theme="dark"] .notes-cell:hover {
+  background-color: rgba(100, 180, 255, 0.15);
 }
 </style>

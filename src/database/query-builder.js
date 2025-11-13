@@ -26,7 +26,8 @@ const TABLE_DATABASE_MAP = {
   // Job Database Tables
   'Bill': 'job',
   'Orders': 'job',
-  'OrderDetails': 'job'
+  'OrderDetails': 'job',
+  'Jobs': 'job'
 };
 
 /**

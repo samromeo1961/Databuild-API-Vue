@@ -29,16 +29,26 @@
 
         <!-- Template Selector -->
         <div class="col-md-2">
-          <select
-            class="form-select"
-            v-model="selectedTemplateId"
-            @change="onTemplateChange"
-          >
-            <option value="">Select Template...</option>
-            <option v-for="template in templates" :key="template.id" :value="template.id">
-              {{ template.templateName }} ({{ template.items?.length || 0 }} items)
-            </option>
-          </select>
+          <div class="input-group">
+            <select
+              class="form-select"
+              v-model="selectedTemplateId"
+              @change="onTemplateChange"
+            >
+              <option value="">Select Template...</option>
+              <option v-for="template in templates" :key="template.id" :value="template.id">
+                {{ template.templateName }} ({{ template.items?.length || 0 }} items)
+              </option>
+            </select>
+            <button
+              class="btn btn-outline-secondary"
+              @click="handleRenameTemplate"
+              :disabled="!selectedTemplate"
+              title="Rename Template"
+            >
+              <i class="bi bi-pencil-square"></i>
+            </button>
+          </div>
         </div>
 
         <!-- Action Buttons -->
@@ -392,6 +402,46 @@
       @template-imported="onTemplateImported"
     />
 
+    <!-- Notes Edit Modal -->
+    <NotesEditModal
+      ref="notesEditModalRef"
+      @note-saved="onNoteSaved"
+    />
+
+    <!-- Rename Template Modal -->
+    <div class="modal fade" id="renameTemplateModal" tabindex="-1" aria-hidden="true" ref="renameTemplateModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-pencil-square me-2"></i>
+              Rename Template
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <label for="renameInput" class="form-label">Template Name</label>
+            <input
+              type="text"
+              class="form-control"
+              id="renameInput"
+              v-model="renameTemplateName"
+              ref="renameInputRef"
+              @keyup.enter="confirmRename"
+              maxlength="100"
+            />
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" @click="confirmRename" :disabled="!renameTemplateName.trim()">
+              <i class="bi bi-check-circle me-2"></i>
+              Rename
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Add from Catalogue Modal -->
     <div
       class="modal fade"
@@ -731,6 +781,7 @@ import { useRouter } from 'vue-router';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable';
 import JobImportModal from './JobImportModal.vue';
+import NotesEditModal from '../common/NotesEditModal.vue';
 
 const api = useElectronAPI();
 const columnNamesComposable = useColumnNames();
@@ -776,6 +827,14 @@ const loadingCatalogue = ref(false);
 
 // Job Import Modal
 const jobImportModalRef = ref(null);
+const notesEditModalRef = ref(null);
+
+// Rename Modal
+const renameTemplateModal = ref(null);
+const renameInputRef = ref(null);
+const renameTemplateName = ref('');
+let renameModalInstance = null;
+
 let catalogueSearchDebounce = null;
 
 // Template Editor Modal
@@ -878,6 +937,25 @@ const columnDefs = ref([
       params.data.description = params.newValue;
       return true;
     }
+  },
+  {
+    field: 'notes',
+    headerName: 'Notes',
+    width: 300,
+    filter: 'agTextColumnFilter',
+    sortable: true,
+    editable: false,
+    cellRenderer: (params) => {
+      const noteText = params.value || '';
+      const preview = noteText.length > 50 ? noteText.substring(0, 50) + '...' : noteText;
+      const displayText = noteText ? preview : '<i class="text-muted">Click to add notes...</i>';
+      return `
+        <div class="notes-cell" style="cursor: pointer; padding: 4px 0;" data-action="edit-note">
+          ${displayText}
+        </div>
+      `;
+    },
+    tooltipValueGetter: (params) => params.value || 'Click to edit notes'
   },
   {
     field: 'Unit',
@@ -1060,9 +1138,12 @@ const loadTemplates = async () => {
         if (updatedTemplate) {
           selectedTemplate.value = updatedTemplate;
 
-          // Resolve zzType for all items in the refreshed template
+          // Resolve zzType and load notes for all items in the refreshed template
           if (selectedTemplate.value && selectedTemplate.value.items) {
-            await resolveZzTypesForItems(selectedTemplate.value.items);
+            await Promise.all([
+              resolveZzTypesForItems(selectedTemplate.value.items),
+              loadNotesForItems(selectedTemplate.value.items)
+            ]);
 
             // Force grid refresh if grid is ready
             if (gridApi.value) {
@@ -1123,14 +1204,56 @@ const resolveZzTypesForItems = async (items) => {
   }
 };
 
+/**
+ * Load and merge notes into template items
+ * Notes are stored separately in notes-store and linked by PriceCode
+ */
+const loadNotesForItems = async (items) => {
+  try {
+    console.log('[Notes] Loading notes for', items.length, 'items');
+    const notesResult = await api.notesStore.getAll();
+    const allNotes = notesResult?.success ? notesResult.data : {};
+
+    console.log('[Notes] Loaded notes from store:', Object.keys(allNotes).length, 'notes');
+    console.log('[Notes] Note keys:', Object.keys(allNotes));
+
+    let matchCount = 0;
+    let noMatchCount = 0;
+
+    // Merge notes into items based on PriceCode
+    items.forEach(item => {
+      if (item.PriceCode && allNotes[item.PriceCode]) {
+        item.notes = allNotes[item.PriceCode];
+        matchCount++;
+        console.log(`[Notes] Matched note for ${item.PriceCode}: "${item.notes.substring(0, 50)}..."`);
+      } else {
+        item.notes = ''; // Default to empty string
+        noMatchCount++;
+        console.log(`[Notes] No note found for ${item.PriceCode}`);
+      }
+    });
+
+    console.log(`[Notes] Merge complete: ${matchCount} matched, ${noMatchCount} without notes`);
+  } catch (err) {
+    console.error('[Notes] Error loading notes:', err);
+    // Set empty notes for all items on error
+    items.forEach(item => {
+      item.notes = '';
+    });
+  }
+};
+
 // Template change handler
 const onTemplateChange = async () => {
   if (selectedTemplateId.value) {
     selectedTemplate.value = templates.value.find(t => t.id === selectedTemplateId.value);
 
-    // Resolve zzType for all items in the template
+    // Resolve zzType and load notes for all items in the template
     if (selectedTemplate.value && selectedTemplate.value.items) {
-      await resolveZzTypesForItems(selectedTemplate.value.items);
+      await Promise.all([
+        resolveZzTypesForItems(selectedTemplate.value.items),
+        loadNotesForItems(selectedTemplate.value.items)
+      ]);
 
       // Force grid refresh by triggering reactivity
       if (gridApi.value) {
@@ -1174,6 +1297,8 @@ const onGridReady = (params) => {
       handleSendSingleItemToZzTakeoff(event.data);
     } else if (action === 'delete') {
       handleDeleteItem(event.data);
+    } else if (action === 'edit-note') {
+      handleEditNote(event.data);
     }
   });
 
@@ -1197,6 +1322,7 @@ const onCellValueChanged = async (event) => {
   if (!selectedTemplate.value) return;
 
   try {
+    // Notes are now edited via modal, not inline editing
     // For zzType, also save override to zzType store
     if (field === 'zzType') {
       await api.zzTypeStore.set(data.PriceCode, newValue.toLowerCase());
@@ -1246,6 +1372,133 @@ const onCellValueChanged = async (event) => {
     error.value = `Failed to update ${field}`;
     // Revert the change in the grid
     event.node.setDataValue(field, oldValue);
+  }
+};
+
+// Handle edit note - opens modal
+const handleEditNote = (rowData) => {
+  if (!rowData || !rowData.PriceCode) return;
+
+  if (notesEditModalRef.value) {
+    notesEditModalRef.value.show(rowData.PriceCode, rowData.notes || '');
+  }
+};
+
+// Handle note saved from modal
+const onNoteSaved = async ({ priceCode, note }) => {
+  try {
+    // Save note to notes-store
+    await api.notesStore.save(priceCode, note);
+    console.log('[Notes] Saved note for:', priceCode);
+
+    // Update the grid display
+    if (gridApi.value && selectedTemplate.value?.items) {
+      const rowNode = gridApi.value.getRowNode(priceCode);
+      if (rowNode) {
+        rowNode.setDataValue('notes', note);
+      } else {
+        // If row node not found by id, update in data and refresh
+        selectedTemplate.value.items.forEach(item => {
+          if (item.PriceCode === priceCode) {
+            item.notes = note;
+          }
+        });
+        gridApi.value.refreshCells({ force: true });
+      }
+    }
+  } catch (err) {
+    console.error('[Notes] Error saving note:', err);
+    error.value = 'Failed to save note';
+  }
+};
+
+// Handle rename template - opens modal
+const handleRenameTemplate = () => {
+  if (!selectedTemplate.value) return;
+
+  // Set current name in input
+  renameTemplateName.value = selectedTemplate.value.templateName;
+
+  // Initialize modal if needed
+  if (renameTemplateModal.value && !renameModalInstance) {
+    renameModalInstance = new Modal(renameTemplateModal.value);
+  }
+
+  // Show modal
+  if (renameModalInstance) {
+    renameModalInstance.show();
+
+    // Focus input after modal is shown
+    setTimeout(() => {
+      if (renameInputRef.value) {
+        renameInputRef.value.focus();
+        renameInputRef.value.select();
+      }
+    }, 300);
+  }
+};
+
+// Confirm rename from modal
+const confirmRename = async () => {
+  if (!selectedTemplate.value || !renameTemplateName.value.trim()) return;
+
+  const currentName = selectedTemplate.value.templateName;
+  const newName = renameTemplateName.value.trim();
+
+  if (newName === currentName) {
+    // Name unchanged - just close
+    if (renameModalInstance) {
+      renameModalInstance.hide();
+    }
+    return;
+  }
+
+  try {
+    // Normalize items to ensure they're serializable (no AG Grid nodes, etc.)
+    const normalizedItems = (selectedTemplate.value.items || []).map(item => ({
+      PriceCode: String(item.PriceCode || ''),
+      description: String(item.description || ''),
+      workup: String(item.workup || ''),
+      Unit: String(item.Unit || ''),
+      Price: Number(item.Price || 0),
+      CostCentre: String(item.CostCentre || ''),
+      costCentreName: String(item.costCentreName || ''),
+      SubGroup: String(item.SubGroup || ''),
+      zzType: String(item.zzType || 'count'),
+      quantity: Number(item.quantity || 1),
+      supplier: String(item.supplier || ''),
+      orderNumber: String(item.orderNumber || ''),
+      lineNumber: Number(item.lineNumber || 0),
+      sortOrder: Number(item.sortOrder || 0)
+    }));
+
+    // Create clean template object for saving
+    const templateToSave = {
+      id: String(selectedTemplate.value.id || ''),
+      templateName: newName,
+      description: String(selectedTemplate.value.description || ''),
+      items: normalizedItems,
+      dateCreated: String(selectedTemplate.value.dateCreated || new Date().toISOString()),
+      dateModified: new Date().toISOString(),
+      metadata: selectedTemplate.value.metadata || {}
+    };
+
+    const result = await api.templatesStore.save(templateToSave);
+
+    if (result.success) {
+      success.value = `Template renamed to "${newName}"`;
+      await loadTemplates(); // Refresh template list
+
+      // Close modal
+      if (renameModalInstance) {
+        renameModalInstance.hide();
+      }
+    } else {
+      error.value = result.message || 'Failed to rename template';
+    }
+  } catch (err) {
+    console.error('Error renaming template:', err);
+    error.value = 'Error renaming template: ' + err.message;
   }
 };
 
@@ -1746,21 +1999,29 @@ const handleImportFromJob = () => {
 };
 
 // Handle template imported from job
-const onTemplateImported = (template) => {
-  // Refresh templates list
-  loadTemplates();
+const onTemplateImported = async (template) => {
+  try {
+    // Show success message immediately
+    const templateName = template?.templateName || 'New Template';
+    success.value = `Template "${templateName}" imported successfully from job!`;
 
-  // Select the newly created template
-  if (template && template.id) {
-    selectedTemplateId.value = template.id;
-    onTemplateChange();
+    // Refresh templates list
+    await loadTemplates();
+
+    // Select the newly created template
+    if (template && template.id) {
+      selectedTemplateId.value = template.id;
+      await onTemplateChange();
+    }
+
+    // Clear success message after 5 seconds
+    setTimeout(() => {
+      success.value = null;
+    }, 5000);
+  } catch (err) {
+    console.error('[Template Import] Error handling template import:', err);
+    error.value = 'Error loading imported template: ' + err.message;
   }
-
-  // Show success message
-  success.value = `Template "${template.templateName}" imported successfully from job!`;
-  setTimeout(() => {
-    success.value = null;
-  }, 5000);
 };
 
 // Handle Import from CSV
