@@ -129,6 +129,21 @@
             <i class="bi bi-file-earmark-excel"></i>
           </button>
           <button
+            class="btn btn-outline-success"
+            @click="handleExportTemplate"
+            :disabled="!selectedTemplate"
+            title="Export Template (with notes)"
+          >
+            <i class="bi bi-download"></i>
+          </button>
+          <button
+            class="btn btn-outline-primary"
+            @click="handleImportTemplate"
+            title="Import Template (with notes)"
+          >
+            <i class="bi bi-upload"></i>
+          </button>
+          <button
             class="btn btn-outline-danger"
             @click="handleDelete"
             :disabled="!selectedTemplate"
@@ -769,6 +784,130 @@
         </div>
       </div>
     </div>
+
+    <!-- Export Template Modal -->
+    <div class="modal fade" id="exportTemplateModal" tabindex="-1" ref="exportTemplateModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-download me-2"></i>
+              Export Template
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-3">
+              Export <strong>{{ selectedTemplate?.templateName }}</strong> ({{ selectedTemplate?.items?.length || 0 }} items) with notes.
+            </p>
+            <div class="mb-3">
+              <label class="form-label">Export Format:</label>
+              <div class="d-grid gap-2">
+                <button
+                  class="btn btn-outline-primary d-flex align-items-center justify-content-between"
+                  @click="exportAsJSON"
+                >
+                  <span>
+                    <i class="bi bi-filetype-json me-2"></i>
+                    JSON Format
+                  </span>
+                  <small class="text-muted">Preserves all data</small>
+                </button>
+                <button
+                  class="btn btn-outline-success d-flex align-items-center justify-content-between"
+                  @click="exportAsCSV"
+                >
+                  <span>
+                    <i class="bi bi-filetype-csv me-2"></i>
+                    CSV Format
+                  </span>
+                  <small class="text-muted">Compatible with Excel</small>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Template Modal -->
+    <div class="modal fade" id="importTemplateModal" tabindex="-1" ref="importTemplateModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-upload me-2"></i>
+              Import Template
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Select File:</label>
+              <input
+                type="file"
+                class="form-control"
+                accept=".json,.csv"
+                @change="onImportFileSelected"
+                ref="importFileInput"
+              />
+              <small class="form-text text-muted">
+                Supported formats: JSON, CSV
+              </small>
+            </div>
+
+            <div v-if="importPreview" class="mb-3">
+              <div class="alert alert-info">
+                <strong>Preview:</strong><br>
+                Template Name: <strong>{{ importPreview.templateName }}</strong><br>
+                Items: <strong>{{ importPreview.itemCount }}</strong><br>
+                Items with Notes: <strong>{{ importPreview.notesCount }}</strong>
+              </div>
+
+              <div v-if="importPreview.conflict" class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Conflict Detected!</strong><br>
+                A template named "{{ importPreview.templateName }}" already exists.
+              </div>
+
+              <div v-if="importPreview.conflict" class="mb-3">
+                <label class="form-label">Conflict Resolution:</label>
+                <select class="form-select" v-model="importConflictAction">
+                  <option value="rename">Create new template with different name</option>
+                  <option value="replace">Replace existing template</option>
+                  <option value="merge">Merge items into existing template</option>
+                </select>
+              </div>
+
+              <div v-if="importConflictAction === 'rename'" class="mb-3">
+                <label class="form-label">New Template Name:</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  v-model="importNewName"
+                  placeholder="Enter new template name..."
+                />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="confirmImportTemplate"
+              :disabled="!importPreview || (importConflictAction === 'rename' && !importNewName)"
+            >
+              <i class="bi bi-check-circle me-1"></i>
+              Import Template
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -818,6 +957,17 @@ const renameColumnName = ref('');
 const addFromCatalogueModal = ref(null);
 let addFromCatalogueModalInstance = null;
 const catalogueSearchTerm = ref('');
+
+// Export/Import Template Modals
+const exportTemplateModal = ref(null);
+let exportTemplateModalInstance = null;
+const importTemplateModal = ref(null);
+let importTemplateModalInstance = null;
+const importFileInput = ref(null);
+const importPreview = ref(null);
+const importConflictAction = ref('rename');
+const importNewName = ref('');
+const importData = ref(null);
 const catalogueCostCentre = ref('');
 const catalogueCostCentres = ref([]);
 const catalogueItems = ref([]);
@@ -1878,6 +2028,389 @@ const handleExportToExcel = () => {
   }
 };
 
+// Handle export template - opens export modal
+const handleExportTemplate = () => {
+  if (exportTemplateModalInstance && selectedTemplate.value) {
+    exportTemplateModalInstance.show();
+  }
+};
+
+// Export template as JSON
+const exportAsJSON = async () => {
+  if (!selectedTemplate.value) return;
+
+  try {
+    // Get notes for all items in template
+    const notesData = await api.notesStore.getAll();
+
+    // Prepare export data
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      template: {
+        templateName: selectedTemplate.value.templateName,
+        description: selectedTemplate.value.description || '',
+        items: selectedTemplate.value.items.map(item => ({
+          PriceCode: item.PriceCode,
+          description: item.description,
+          Unit: item.Unit || '',
+          Price: item.Price || 0,
+          CostCentre: item.CostCentre || '',
+          zzType: item.zzType || '',
+          notes: notesData[item.PriceCode] || ''
+        }))
+      }
+    };
+
+    // Create download link
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedTemplate.value.templateName}-export.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Close modal and show success
+    if (exportTemplateModalInstance) {
+      exportTemplateModalInstance.hide();
+    }
+    success.value = `Exported template "${selectedTemplate.value.templateName}" as JSON`;
+    setTimeout(() => (success.value = null), 3000);
+  } catch (err) {
+    console.error('[ExportJSON] Error:', err);
+    error.value = `Failed to export template: ${err.message}`;
+    setTimeout(() => (error.value = null), 5000);
+  }
+};
+
+// Export template as CSV
+const exportAsCSV = async () => {
+  if (!selectedTemplate.value) return;
+
+  try {
+    // Get notes for all items in template
+    const notesData = await api.notesStore.getAll();
+
+    // Prepare CSV header
+    const headers = ['PriceCode', 'Description', 'Unit', 'Price', 'CostCentre', 'zzType', 'Notes'];
+    const rows = selectedTemplate.value.items.map(item => [
+      item.PriceCode || '',
+      item.description || '',
+      item.Unit || '',
+      item.Price || 0,
+      item.CostCentre || '',
+      item.zzType || '',
+      (notesData[item.PriceCode] || '').replace(/"/g, '""') // Escape quotes
+    ]);
+
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedTemplate.value.templateName}-export.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Close modal and show success
+    if (exportTemplateModalInstance) {
+      exportTemplateModalInstance.hide();
+    }
+    success.value = `Exported template "${selectedTemplate.value.templateName}" as CSV`;
+    setTimeout(() => (success.value = null), 3000);
+  } catch (err) {
+    console.error('[ExportCSV] Error:', err);
+    error.value = `Failed to export template: ${err.message}`;
+    setTimeout(() => (error.value = null), 5000);
+  }
+};
+
+// Handle import template - opens import modal
+const handleImportTemplate = () => {
+  if (importTemplateModalInstance) {
+    // Reset state
+    importPreview.value = null;
+    importData.value = null;
+    importConflictAction.value = 'rename';
+    importNewName.value = '';
+    if (importFileInput.value) {
+      importFileInput.value.value = '';
+    }
+    importTemplateModalInstance.show();
+  }
+};
+
+// Handle import file selected
+const onImportFileSelected = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const fileName = file.name.toLowerCase();
+    const fileContent = await file.text();
+
+    let parsedData;
+    let templateName;
+    let items = [];
+
+    // Parse JSON or CSV
+    if (fileName.endsWith('.json')) {
+      parsedData = JSON.parse(fileContent);
+
+      // Validate JSON structure
+      if (!parsedData.template || !Array.isArray(parsedData.template.items)) {
+        throw new Error('Invalid JSON format. Expected {template: {templateName, items: [...]}}');
+      }
+
+      templateName = parsedData.template.templateName;
+      items = parsedData.template.items;
+    } else if (fileName.endsWith('.csv')) {
+      // Parse CSV
+      const lines = fileContent.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        throw new Error('CSV file is empty or has no data rows');
+      }
+
+      // Parse header to find column positions
+      const header = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+
+      // Use filename as template name (remove extension)
+      templateName = file.name.replace(/\.csv$/i, '');
+
+      // Parse data rows
+      items = lines.slice(1).map(line => {
+        // Simple CSV parser (handles quoted fields)
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"' && (i === 0 || line[i - 1] !== '\\')) {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            values.push(current.replace(/^"|"$/g, ''));
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        values.push(current.replace(/^"|"$/g, ''));
+
+        // Map values to object
+        const item = {};
+        header.forEach((col, idx) => {
+          const colLower = col.toLowerCase();
+          if (colLower === 'pricecode') item.PriceCode = values[idx] || '';
+          else if (colLower === 'description') item.description = values[idx] || '';
+          else if (colLower === 'unit') item.Unit = values[idx] || '';
+          else if (colLower === 'price') item.Price = parseFloat(values[idx]) || 0;
+          else if (colLower === 'costcentre') item.CostCentre = values[idx] || '';
+          else if (colLower === 'zztype') item.zzType = values[idx] || '';
+          else if (colLower === 'notes') item.notes = values[idx] || '';
+        });
+
+        return item;
+      });
+    } else {
+      throw new Error('Unsupported file format. Please use .json or .csv files.');
+    }
+
+    // Check for conflict
+    const existingTemplate = templates.value.find(t => t.templateName === templateName);
+    const conflict = !!existingTemplate;
+
+    // Count items with notes
+    const notesCount = items.filter(item => item.notes && item.notes.trim()).length;
+
+    // Store parsed data
+    importData.value = {
+      templateName,
+      description: parsedData?.template?.description || '',
+      items
+    };
+
+    // Show preview
+    importPreview.value = {
+      templateName,
+      itemCount: items.length,
+      notesCount,
+      conflict
+    };
+
+    // Set default new name if conflict
+    if (conflict) {
+      importNewName.value = `${templateName} (imported)`;
+    }
+
+  } catch (err) {
+    console.error('[ImportFile] Error:', err);
+    error.value = `Failed to parse file: ${err.message}`;
+    setTimeout(() => (error.value = null), 5000);
+    importPreview.value = null;
+    importData.value = null;
+  }
+};
+
+// Confirm import template
+const confirmImportTemplate = async () => {
+  if (!importData.value || !importPreview.value) return;
+
+  try {
+    const { templateName, description, items } = importData.value;
+    const { conflict } = importPreview.value;
+
+    let finalTemplateName = templateName;
+    let targetTemplate = null;
+
+    // Handle conflict resolution
+    if (conflict) {
+      if (importConflictAction.value === 'rename') {
+        if (!importNewName.value.trim()) {
+          error.value = 'Please enter a new template name';
+          setTimeout(() => (error.value = null), 3000);
+          return;
+        }
+        finalTemplateName = importNewName.value.trim();
+
+        // Check if new name also conflicts
+        const newNameConflict = templates.value.find(t => t.templateName === finalTemplateName);
+        if (newNameConflict) {
+          error.value = `Template "${finalTemplateName}" already exists. Please choose a different name.`;
+          setTimeout(() => (error.value = null), 5000);
+          return;
+        }
+      } else if (importConflictAction.value === 'replace') {
+        // Find existing template
+        targetTemplate = templates.value.find(t => t.templateName === templateName);
+      } else if (importConflictAction.value === 'merge') {
+        // Find existing template
+        targetTemplate = templates.value.find(t => t.templateName === templateName);
+      }
+    }
+
+    // Prepare items (clean and validate)
+    const cleanedItems = items.map(item => ({
+      PriceCode: String(item.PriceCode || '').trim(),
+      description: String(item.description || '').trim(),
+      Unit: String(item.Unit || '').trim(),
+      Price: Number(item.Price) || 0,
+      CostCentre: String(item.CostCentre || '').trim(),
+      zzType: String(item.zzType || '').trim()
+    })).filter(item => item.PriceCode); // Only include items with PriceCode
+
+    if (cleanedItems.length === 0) {
+      error.value = 'No valid items found in import file';
+      setTimeout(() => (error.value = null), 5000);
+      return;
+    }
+
+    // Save notes to notes-store
+    const notesToSave = {};
+    items.forEach(item => {
+      if (item.PriceCode && item.notes && item.notes.trim()) {
+        notesToSave[item.PriceCode] = item.notes.trim();
+      }
+    });
+
+    if (Object.keys(notesToSave).length > 0) {
+      await api.notesStore.saveMultiple(notesToSave, true); // merge=true to preserve existing notes
+      console.log(`[Import] Saved ${Object.keys(notesToSave).length} notes`);
+    }
+
+    // Create or update template
+    if (importConflictAction.value === 'merge' && targetTemplate) {
+      // Merge items into existing template
+      const existingPriceCodes = new Set(targetTemplate.items.map(i => i.PriceCode));
+      const newItems = cleanedItems.filter(i => !existingPriceCodes.has(i.PriceCode));
+
+      const updatedItems = [...targetTemplate.items, ...newItems];
+
+      const response = await api.templates.save({
+        id: targetTemplate.id,
+        templateName: targetTemplate.templateName,
+        description: targetTemplate.description || '',
+        items: updatedItems
+      });
+
+      if (response.success) {
+        await loadTemplates();
+        selectedTemplateId.value = targetTemplate.id;
+        await onTemplateChange();
+
+        success.value = `Merged ${newItems.length} new items into template "${targetTemplate.templateName}"`;
+        setTimeout(() => (success.value = null), 3000);
+      } else {
+        throw new Error(response.message || 'Failed to merge template');
+      }
+    } else if (importConflictAction.value === 'replace' && targetTemplate) {
+      // Replace existing template
+      const response = await api.templates.save({
+        id: targetTemplate.id,
+        templateName: targetTemplate.templateName,
+        description: description || targetTemplate.description || '',
+        items: cleanedItems
+      });
+
+      if (response.success) {
+        await loadTemplates();
+        selectedTemplateId.value = targetTemplate.id;
+        await onTemplateChange();
+
+        success.value = `Replaced template "${targetTemplate.templateName}" with ${cleanedItems.length} items`;
+        setTimeout(() => (success.value = null), 3000);
+      } else {
+        throw new Error(response.message || 'Failed to replace template');
+      }
+    } else {
+      // Create new template
+      const response = await api.templates.save({
+        id: Date.now().toString(),
+        templateName: finalTemplateName,
+        description: description || '',
+        items: cleanedItems
+      });
+
+      if (response.success) {
+        await loadTemplates();
+
+        // Select the new template
+        const newTemplate = templates.value.find(t => t.templateName === finalTemplateName);
+        if (newTemplate) {
+          selectedTemplateId.value = newTemplate.id;
+          await onTemplateChange();
+        }
+
+        success.value = `Imported template "${finalTemplateName}" with ${cleanedItems.length} items`;
+        setTimeout(() => (success.value = null), 3000);
+      } else {
+        throw new Error(response.message || 'Failed to create template');
+      }
+    }
+
+    // Close modal
+    if (importTemplateModalInstance) {
+      importTemplateModalInstance.hide();
+    }
+
+  } catch (err) {
+    console.error('[ImportTemplate] Error:', err);
+    error.value = `Failed to import template: ${err.message}`;
+    setTimeout(() => (error.value = null), 5000);
+  }
+};
+
 // Handle delete - shows modal for either deleting items or entire template
 const handleDelete = () => {
   if (deleteTemplateModalInstance) {
@@ -2816,6 +3349,14 @@ onMounted(async () => {
 
   if (templateEditorModal.value) {
     templateEditorModalInstance = new Modal(templateEditorModal.value);
+  }
+
+  if (exportTemplateModal.value) {
+    exportTemplateModalInstance = new Modal(exportTemplateModal.value);
+  }
+
+  if (importTemplateModal.value) {
+    importTemplateModalInstance = new Modal(importTemplateModal.value);
   }
 
   // Listen for preference updates

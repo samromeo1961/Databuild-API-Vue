@@ -40,7 +40,7 @@
             </button>
           </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
           <SearchableSelect
             v-model="costCentre"
             :options="costCentres"
@@ -51,8 +51,15 @@
             @change="onFilterChange"
           />
         </div>
-        <div class="col-md-7" style="position: relative; z-index: 20;">
+        <div class="col-md-6" style="position: relative; z-index: 20;">
           <div class="d-flex justify-content-end align-items-center gap-3" style="position: relative; z-index: 20;">
+            <button
+              :class="onlyWithNotes ? 'btn btn-primary' : 'btn btn-outline-secondary'"
+              @click="toggleNotesFilter"
+              :title="onlyWithNotes ? 'Filter: Items with notes (active)' : 'Filter: Show only items with notes'"
+            >
+              <i class="bi bi-sticky"></i>
+            </button>
             <button
               class="btn btn-outline-primary"
               @click="handleAddToFavourites"
@@ -109,29 +116,113 @@
     </div>
 
     <!-- AG Grid -->
-    <div class="flex-grow-1 position-relative" style="z-index: 1;">
-      <ag-grid-vue
-        class="ag-theme-quartz h-100"
-        :class="{ 'ag-theme-quartz-dark': isDarkMode }"
-        theme="legacy"
-        :columnDefs="columnDefs"
-        :rowData="rowData"
-        :defaultColDef="defaultColDef"
-        :pagination="true"
-        :paginationPageSize="pageSize"
-        :paginationPageSizeSelector="pageSizeOptions"
-        :rowSelection="rowSelectionConfig"
-        :loading="loading"
-        :enableCellTextSelection="true"
-        :ensureDomOrder="true"
-        @grid-ready="onGridReady"
-        @selection-changed="onSelectionChanged"
-        @sort-changed="onSortChanged"
-        @cell-value-changed="onCellValueChanged"
-        @column-resized="onColumnResized"
-        @column-moved="onColumnMoved"
-        @column-visible="onColumnVisible"
-      />
+    <div class="flex-grow-1 position-relative d-flex flex-column" style="z-index: 1;">
+      <div class="flex-grow-1">
+        <ag-grid-vue
+          class="ag-theme-quartz h-100"
+          :class="{ 'ag-theme-quartz-dark': isDarkMode }"
+          theme="legacy"
+          :columnDefs="columnDefs"
+          :rowData="rowData"
+          :defaultColDef="defaultColDef"
+          :pagination="false"
+          :rowSelection="rowSelectionConfig"
+          :loading="loading"
+          :enableCellTextSelection="true"
+          :ensureDomOrder="true"
+          @grid-ready="onGridReady"
+          @selection-changed="onSelectionChanged"
+          @sort-changed="onSortChanged"
+          @cell-value-changed="onCellValueChanged"
+          @column-resized="onColumnResized"
+          @column-moved="onColumnMoved"
+          @column-visible="onColumnVisible"
+        />
+      </div>
+
+      <!-- Custom Pagination Controls (AG Grid style - matching Recipes layout) -->
+      <div class="ag-paging-panel ag-unselectable">
+        <!-- Left side: Total count with hamburger icon -->
+        <span class="ag-paging-row-summary-panel">
+          <i class="bi bi-list"></i>
+          <span class="ag-paging-total-text">Total: <strong>{{ totalSize.toLocaleString() }}</strong> items</span>
+        </span>
+
+        <!-- Right side: All pagination controls grouped together -->
+        <span class="ag-paging-page-summary-panel">
+          <!-- Page Size dropdown -->
+          <span class="ag-paging-page-size">
+            Page Size:
+            <select
+              class="ag-paging-page-size-selector"
+              v-model="pageSize"
+              @change="onPageSizeChange"
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </span>
+
+          <!-- Item range -->
+          <span class="ag-paging-row-summary-panel-numbers">
+            <span class="ag-paging-row-summary-panel-number">{{ ((currentPage * pageSize) + 1).toLocaleString() }}</span>
+            to
+            <span class="ag-paging-row-summary-panel-number">{{ Math.min((currentPage + 1) * pageSize, totalSize).toLocaleString() }}</span>
+            of
+            <span class="ag-paging-row-summary-panel-number">{{ totalSize.toLocaleString() }}</span>
+          </span>
+
+          <!-- Navigation buttons -->
+          <div class="ag-paging-button-wrapper">
+            <button
+              type="button"
+              class="ag-paging-button"
+              @click="goToFirstPage"
+              :disabled="currentPage === 0"
+              ref="btFirst"
+            >
+              <span class="ag-icon ag-icon-first"></span>
+            </button>
+            <button
+              type="button"
+              class="ag-paging-button"
+              @click="goToPreviousPage"
+              :disabled="currentPage === 0"
+              ref="btPrevious"
+            >
+              <span class="ag-icon ag-icon-previous"></span>
+            </button>
+            <button
+              type="button"
+              class="ag-paging-button"
+              @click="goToNextPage"
+              :disabled="currentPage >= totalPages - 1"
+              ref="btNext"
+            >
+              <span class="ag-icon ag-icon-next"></span>
+            </button>
+            <button
+              type="button"
+              class="ag-paging-button"
+              @click="goToLastPage"
+              :disabled="currentPage >= totalPages - 1"
+              ref="btLast"
+            >
+              <span class="ag-icon ag-icon-last"></span>
+            </button>
+          </div>
+
+          <!-- Page number -->
+          <span class="ag-paging-description">
+            Page
+            <span ref="lbCurrent">{{ (currentPage + 1).toLocaleString() }}</span>
+            of
+            <span ref="lbTotal">{{ totalPages.toLocaleString() }}</span>
+          </span>
+        </span>
+      </div>
     </div>
 
     <!-- Column Management Modal -->
@@ -308,14 +399,51 @@ const error = ref(null);
 const success = ref(null);
 const searchTerm = ref('');
 const costCentre = ref('');
+const onlyWithNotes = ref(false);
 const costCentres = ref([]);
 const totalSize = ref(0);
 const selectedRows = ref([]);
 const gridApi = ref(null);
 const pageSize = ref(50);
+const currentPage = ref(0);
 const pageSizeOptions = [25, 50, 100, 200];
 const sortField = ref(null);
 const sortOrder = ref('asc');
+
+// Computed: Total pages
+const totalPages = computed(() => {
+  return Math.ceil(totalSize.value / pageSize.value) || 1;
+});
+
+// Pagination functions
+const goToFirstPage = () => {
+  currentPage.value = 0;
+  loadData();
+};
+
+const goToPreviousPage = () => {
+  if (currentPage.value > 0) {
+    currentPage.value--;
+    loadData();
+  }
+};
+
+const goToNextPage = () => {
+  if (currentPage.value < totalPages.value - 1) {
+    currentPage.value++;
+    loadData();
+  }
+};
+
+const goToLastPage = () => {
+  currentPage.value = totalPages.value - 1;
+  loadData();
+};
+
+const onPageSizeChange = () => {
+  currentPage.value = 0;
+  loadData();
+};
 
 // Column Management Modal
 const columnManagementModalRef = ref(null);
@@ -382,7 +510,7 @@ const columnDefs = ref([
     field: 'notes',
     headerName: 'Notes',
     width: 300,
-    filter: 'agTextColumnFilter',
+    filter: false, // Disabled - use "Only items with notes" checkbox instead (server-side filter)
     sortable: true,
     editable: false,
     cellRenderer: (params) => {
@@ -523,7 +651,7 @@ const loadData = async () => {
   try {
     const params = {
       limit: pageSize.value,
-      offset: (gridApi.value?.paginationGetCurrentPage() || 0) * pageSize.value
+      offset: currentPage.value * pageSize.value
     };
 
     if (searchTerm.value) {
@@ -534,12 +662,21 @@ const loadData = async () => {
       params.costCentre = costCentre.value;
     }
 
+    if (onlyWithNotes.value) {
+      params.onlyWithNotes = true;
+      console.log('[LoadData] Only items with notes filter: ENABLED');
+    } else {
+      console.log('[LoadData] Only items with notes filter: DISABLED');
+    }
+
     if (sortField.value) {
       params.sortField = sortField.value;
       params.sortOrder = sortOrder.value;
     }
 
+    console.log('[LoadData] Fetching with params:', params);
     const response = await api.catalogue.getItems(params);
+    console.log('[LoadData] Response total:', response?.total);
 
     if (response?.success) {
       const catalogueData = response.data || [];
@@ -598,6 +735,11 @@ const syncAllTemplatesToNotesStore = async () => {
     console.log('[Template Sync] Starting full Template data sync...');
     const response = await api.catalogue.getAllTemplates();
 
+    console.log('[Template Sync] API Response:', response);
+    console.log('[Template Sync] Response success:', response?.success);
+    console.log('[Template Sync] Response data:', response?.data ? `${response.data.length} items` : 'NO DATA');
+    console.log('[Template Sync] Response count:', response?.count);
+
     if (response?.success && response.data) {
       console.log(`[Template Sync] Syncing ${response.count} templates to notes-store`);
 
@@ -605,18 +747,23 @@ const syncAllTemplatesToNotesStore = async () => {
       const existingNotesResponse = await api.notesStore.getAll();
       const existingNotes = existingNotesResponse?.success ? existingNotesResponse.data : {};
 
-      let syncedCount = 0;
+      // Build object of new notes to save (only for items without existing custom notes)
+      const notesToSync = {};
       let skippedCount = 0;
 
-      // Batch sync all templates that don't have custom notes
       for (const item of response.data) {
         // Only sync if no custom note exists (don't overwrite user edits)
         if (!existingNotes[item.PriceCode]) {
-          await api.notesStore.save(item.PriceCode, item.Template);
-          syncedCount++;
+          notesToSync[item.PriceCode] = item.Template;
         } else {
           skippedCount++;
         }
+      }
+
+      // Save ALL notes in ONE batch IPC call (much faster!)
+      const syncedCount = Object.keys(notesToSync).length;
+      if (syncedCount > 0) {
+        await api.notesStore.saveMultiple(notesToSync, false); // merge=false to avoid overwriting
       }
 
       // Mark as synced
@@ -643,6 +790,8 @@ const loadNotesForItems = async () => {
     const allNotes = notesResponse?.success ? notesResponse.data : {};
 
     console.log(`[LoadNotes] Found ${Object.keys(allNotes).length} notes in store`);
+    console.log(`[LoadNotes] First 5 note keys:`, Object.keys(allNotes).slice(0, 5));
+    console.log(`[LoadNotes] First 5 grid ItemCodes:`, rowData.value.slice(0, 5).map(i => i.ItemCode));
 
     let matchedCount = 0;
     let emptyCount = 0;
@@ -726,6 +875,7 @@ const loadCostCentres = async () => {
 const onSearchChange = () => {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => {
+    currentPage.value = 0;
     loadData();
   }, 500);
 };
@@ -733,12 +883,20 @@ const onSearchChange = () => {
 // Clear search
 const clearSearch = () => {
   searchTerm.value = '';
+  currentPage.value = 0;
   loadData();
 };
 
 // Filter change handler
 const onFilterChange = () => {
+  currentPage.value = 0;
   loadData();
+};
+
+// Toggle notes filter (for action button)
+const toggleNotesFilter = () => {
+  onlyWithNotes.value = !onlyWithNotes.value;
+  onFilterChange();
 };
 
 // Grid ready handler
@@ -1220,6 +1378,12 @@ onMounted(async () => {
   await syncAllTemplatesToNotesStore();
   console.log('[Catalogue] Template sync finished');
 
+  // If grid already loaded while sync was happening, reload notes
+  if (gridApi.value && rowData.value.length > 0) {
+    console.log('[Catalogue] Grid already loaded, refreshing notes...');
+    await loadNotesForItems();
+  }
+
   // Initialize modals
   if (columnManagementModalRef.value) {
     columnManagementModal = new Modal(columnManagementModalRef.value);
@@ -1397,5 +1561,143 @@ watch(pageSize, () => {
 [data-theme="dark"] .ag-column-select-header {
   background-color: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
+}
+
+/* Custom pagination styling to match AG Grid native and Recipes tab layout */
+.ag-paging-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 16px;
+  border-top: 1px solid var(--ag-border-color, #babfc7);
+  background-color: var(--ag-background-color, #fff);
+  color: var(--ag-foreground-color, #000);
+  font-size: 13px;
+}
+
+/* Left side: Total count with hamburger icon */
+.ag-paging-row-summary-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ag-paging-row-summary-panel .bi-list {
+  font-size: 20px;
+  opacity: 0.7;
+}
+
+.ag-paging-total-text {
+  font-size: 13px;
+}
+
+.ag-paging-total-text strong {
+  font-weight: 600;
+}
+
+/* Right side: All pagination controls grouped together */
+.ag-paging-page-summary-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Page size dropdown */
+.ag-paging-page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ag-paging-page-size-selector {
+  height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--ag-border-color, #babfc7);
+  background-color: var(--ag-background-color, #fff);
+  color: var(--ag-foreground-color, #000);
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Item range on right side */
+.ag-paging-row-summary-panel-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.ag-paging-row-summary-panel-number {
+  font-weight: 600;
+}
+
+/* Navigation buttons */
+.ag-paging-button-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ag-paging-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ag-border-color, #babfc7);
+  background-color: var(--ag-background-color, #fff);
+  color: var(--ag-foreground-color, #000);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.ag-paging-button:hover:not(:disabled) {
+  background-color: var(--ag-row-hover-color, #f0f0f0);
+}
+
+.ag-paging-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Page description */
+.ag-paging-description {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* AG Grid icons for pagination */
+.ag-icon-first::before { content: "⟪"; }
+.ag-icon-previous::before { content: "‹"; }
+.ag-icon-next::before { content: "›"; }
+.ag-icon-last::before { content: "⟫"; }
+
+/* Dark theme pagination */
+[data-theme="dark"] .ag-paging-panel {
+  border-top-color: var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ag-paging-button {
+  border-color: var(--border-color);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ag-paging-button:hover:not(:disabled) {
+  background-color: var(--bg-primary);
+}
+
+[data-theme="dark"] .ag-paging-page-size-selector {
+  border-color: var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 </style>

@@ -13,6 +13,7 @@ async function getCatalogueItems(event, params) {
       dateFrom,
       dateTo,
       showArchived = false,
+      onlyWithNotes = false,
       limit = 100,
       offset = 0,
       sortField,
@@ -146,6 +147,12 @@ async function getCatalogueItems(event, params) {
     if (dateFrom || dateTo) {
       whereConditions.push(`LP.PriceCode IS NOT NULL`);
       console.log('Date filter active: excluding items without prices in date range');
+    }
+
+    // Filter for items with Template/notes data
+    if (onlyWithNotes) {
+      whereConditions.push(`PL.Template IS NOT NULL AND DATALENGTH(PL.Template) > 0`);
+      console.log('Filtering for items with notes/template data');
     }
 
     const whereClause = whereConditions.length > 0
@@ -569,7 +576,7 @@ async function getAllTemplates(event) {
         PriceCode,
         Template
       FROM PriceList
-      WHERE Template IS NOT NULL AND Template != ''
+      WHERE Template IS NOT NULL AND DATALENGTH(Template) > 0
     `;
 
     const result = await pool.request().query(query);
