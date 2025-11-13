@@ -193,8 +193,9 @@
 </template>
 
 <script>
-import { ref, inject, computed } from 'vue';
+import { ref, computed } from 'vue';
 import { Modal } from 'bootstrap';
+import { useElectronAPI } from '../../composables/useElectronAPI';
 
 export default {
   name: 'JobImportModal',
@@ -203,7 +204,7 @@ export default {
     const modalElement = ref(null);
     let modalInstance = null;
 
-    const api = inject('electronAPI');
+    const api = useElectronAPI();
 
     // State
     const step = ref(1); // 1 = search, 2 = preview
