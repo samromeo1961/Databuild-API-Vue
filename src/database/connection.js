@@ -45,6 +45,7 @@ async function connect(dbConfig) {
 
 /**
  * Test database connection and validate Databuild schema
+ * Validates BOTH System and Job databases (if configured)
  * @param {Object} dbConfig - Database configuration
  * @returns {Promise<Object>} Result with success flag and message
  */
@@ -55,7 +56,7 @@ async function testConnection(dbConfig) {
       user: dbConfig.user,
       password: dbConfig.password,
       server: dbConfig.server,
-      database: dbConfig.database,
+      database: dbConfig.systemDatabase || dbConfig.database,
       options: {
         encrypt: true,
         trustServerCertificate: true,
@@ -70,28 +71,74 @@ async function testConnection(dbConfig) {
 
     testPool = await sql.connect(sqlConfig);
 
-    // Validate Databuild schema
-    const result = await testPool.request().query(`
+    // Validate SYSTEM Database schema
+    const systemResult = await testPool.request().query(`
       SELECT TABLE_NAME
       FROM INFORMATION_SCHEMA.TABLES
       WHERE TABLE_TYPE = 'BASE TABLE'
       AND TABLE_NAME IN ('Supplier', 'PriceList', 'CostCentres', 'Recipe', 'SupplierGroup', 'CCBanks')
     `);
 
-    const tables = result.recordset.map(row => row.TABLE_NAME);
+    const systemTables = systemResult.recordset.map(row => row.TABLE_NAME);
+
+    // Check if Job Database is configured
+    const jobDatabaseName = getJobDatabaseName(dbConfig);
+    let jobTables = [];
+    let jobDatabaseExists = false;
+
+    // Test Job Database if it's configured (and not explicitly disabled)
+    if (jobDatabaseName && dbConfig.enableJobDatabase !== false) {
+      try {
+        // Check if Job Database exists
+        const dbCheckResult = await testPool.request().query(`
+          SELECT name
+          FROM sys.databases
+          WHERE name = '${jobDatabaseName}'
+        `);
+
+        if (dbCheckResult.recordset.length > 0) {
+          jobDatabaseExists = true;
+
+          // Validate Job Database schema
+          const jobResult = await testPool.request().query(`
+            SELECT TABLE_NAME
+            FROM [${jobDatabaseName}].INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_TYPE = 'BASE TABLE'
+            AND TABLE_NAME IN ('Bill', 'Orders', 'OrderDetails')
+          `);
+
+          jobTables = jobResult.recordset.map(row => row.TABLE_NAME);
+        }
+      } catch (jobError) {
+        console.warn('Job Database test failed:', jobError.message);
+        // Don't fail the whole test if Job DB is unavailable
+      }
+    }
 
     await testPool.close();
 
-    if (tables.length >= 5) {
+    // Determine success based on System Database (Job DB is optional)
+    if (systemTables.length >= 5) {
+      let message = 'Connection successful! Databuild System database validated.';
+
+      if (jobDatabaseExists && jobTables.length >= 3) {
+        message += ` Job database (${jobDatabaseName}) also validated.`;
+      } else if (jobDatabaseName && dbConfig.enableJobDatabase !== false) {
+        message += ` Note: Job database (${jobDatabaseName}) not found or missing tables. Job import feature will be unavailable.`;
+      }
+
       return {
         success: true,
-        message: 'Connection successful! Databuild schema validated.',
-        tables
+        message,
+        systemTables,
+        jobTables,
+        jobDatabaseName: jobDatabaseExists ? jobDatabaseName : null,
+        jobDatabaseAvailable: jobDatabaseExists && jobTables.length >= 3
       };
     } else {
       return {
         success: false,
-        message: `Connected but missing required Databuild tables. Found: ${tables.join(', ')}`
+        message: `Connected but missing required Databuild tables. Found: ${systemTables.join(', ')}`
       };
     }
   } catch (error) {
@@ -111,6 +158,36 @@ async function testConnection(dbConfig) {
  */
 function getPool() {
   return dbPool;
+}
+
+/**
+ * Get Job Database name from System Database name
+ * Auto-detects by replacing 'SYS' with 'JOB' or uses explicit configuration
+ * @param {Object} dbConfig - Database configuration
+ * @returns {string|null} Job database name or null if not configured
+ */
+function getJobDatabaseName(dbConfig) {
+  // If explicitly configured, use it
+  if (dbConfig.jobDatabase) {
+    return dbConfig.jobDatabase;
+  }
+
+  // Get system database name
+  const systemDb = dbConfig.systemDatabase || dbConfig.database;
+  if (!systemDb) {
+    return null;
+  }
+
+  // Auto-detect: Replace 'SYS' with 'JOB' (case-insensitive)
+  if (systemDb.toUpperCase().endsWith('SYS')) {
+    return systemDb.substring(0, systemDb.length - 3) + 'JOB';
+  } else if (systemDb.toUpperCase().includes('SYS')) {
+    // Replace SYS in middle of name (e.g., MySysDB → MyJobDB)
+    return systemDb.replace(/SYS/gi, 'JOB').replace(/Sys/g, 'Job');
+  }
+
+  // No auto-detection possible
+  return null;
 }
 
 /**
@@ -220,5 +297,6 @@ module.exports = {
   testConnection,
   switchDatabase,
   getPool,
+  getJobDatabaseName,
   close
 };

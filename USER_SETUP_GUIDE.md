@@ -23,9 +23,24 @@
 - Recipes
 - Suppliers and contacts
 - Templates
+- **Job imports** (NEW - requires Job Database)
 - Integration with zzTakeoff API
 
 This guide will walk you through the complete setup process, from creating database permissions to connecting the application.
+
+### What's New: Job Database Support
+
+DBx Connector Vue now supports **TWO databases**:
+1. **System Database** (e.g., CROWNESYS, T_ESys) - Contains Catalogue, Recipes, Suppliers, Contacts
+2. **Job Database** (e.g., CROWNEJOB, T_EJob) - Contains Job data (Bill, Orders, OrderDetails)
+
+**NEW FEATURE:** Import jobs directly into Templates Tab!
+- Search for jobs by number
+- Preview job items before import
+- Automatic zzType assignment based on quantity
+- Cross-database queries for rich job data
+
+→ **Note:** Job Database is OPTIONAL. If you only need Catalogue/Recipes/Suppliers, you can skip the Job Database setup.
 
 ---
 
@@ -47,22 +62,66 @@ This guide will walk you through the complete setup process, from creating datab
 
 ## Part 1: SQL Server User Setup
 
-### Step 1.1: Identify Your Database
+### Step 1.1: Identify Your Databases
 
-Before proceeding, you need to know your Databuild database name.
+Before proceeding, you need to know your Databuild database names.
 
 1. Open **SQL Server Management Studio (SSMS)**
 2. Connect to your SQL Server instance
 3. In the Object Explorer, expand **Databases**
-4. Look for your Databuild database - common names include:
-   - `CROWNESYS`
-   - `T_Esys`
-   - `Databuild_Production`
-   - Or your company-specific name
+4. Look for your Databuild databases:
 
-**Write down your database name:** `_______________________`
+#### System Database (REQUIRED)
+Common names:
+   - `CROWNESYS`, `T_ESys`, `MyCompanySYS`
+   - Contains: Catalogue, Recipes, Suppliers, Contacts
+
+**Write down your SYSTEM database name:** `_______________________`
+
+#### Job Database (OPTIONAL - for Job Import feature)
+Common names:
+   - `CROWNEJOB`, `T_EJob`, `MyCompanyJOB`
+   - Usually has 'JOB' instead of 'SYS' in the name
+   - Contains: Bill, Orders, OrderDetails (Job data)
+
+**Write down your JOB database name (if applicable):** `_______________________`
+
+→ **Tip:** If your System database is named `CROWNESYS`, your Job database is likely named `CROWNEJOB`.
+
+---
 
 ### Step 1.2: Create Database User
+
+**⚡ RECOMMENDED: Use the Automated Setup Script**
+
+We provide an automated SQL script that handles BOTH databases with a single execution:
+
+📄 **File:** `SQL_USER_SETUP.sql`
+
+**Features:**
+- ✅ Configures BOTH System and Job databases
+- ✅ Auto-detects Job database name (replaces 'SYS' with 'JOB')
+- ✅ Tests cross-database queries
+- ✅ Validates Databuild schema
+- ✅ Comprehensive error checking
+
+**To use the automated script:**
+1. Open `SQL_USER_SETUP.sql` in SQL Server Management Studio
+2. Edit the CONFIGURATION SECTION at the top:
+   ```sql
+   DECLARE @SystemDatabase NVARCHAR(128) = 'CROWNESYS';  -- Your System DB name
+   DECLARE @JobDatabase NVARCHAR(128) = 'AUTO';          -- Auto-detect or specify explicitly
+   DECLARE @Username NVARCHAR(128) = 'dbx_user';
+   DECLARE @Password NVARCHAR(128) = 'YourSecurePassword123!';
+   DECLARE @PermissionLevel VARCHAR(20) = 'READ_ONLY';   -- RECOMMENDED
+   ```
+3. Execute the entire script (F5)
+4. Review the output for success messages
+5. **Skip to [Part 2: Application Installation](#part-2-application-installation)**
+
+---
+
+**📋 Alternative: Manual Setup (if you prefer manual SQL commands)**
 
 You have **three options** for user setup, ordered from most secure to least restrictive:
 
@@ -469,6 +528,202 @@ Once connected, you should see:
      SELECT COUNT(*) FROM PriceList;
      SELECT COUNT(*) FROM Supplier;
      ```
+
+---
+
+## Part 4: Using Job Import Feature (NEW)
+
+**Prerequisites:**
+- Job Database configured and accessible (see Part 1)
+- Application connected to System Database
+- Job data exists in Job Database (Bill, Orders, OrderDetails tables)
+
+### What is the Job Import Feature?
+
+The Job Import feature allows you to **import jobs directly into the Templates Tab** from your Databuild Job Database. This saves time by:
+- Automatically retrieving all job items
+- Calculating zzType based on quantity (Qty=1 → 'part', else → your default)
+- Preserving cost centre, pricing, and description information
+- Creating reusable templates from existing jobs
+
+### How to Import a Job
+
+#### Step 1: Open Templates Tab
+1. Launch DBx Connector Vue
+2. Click the **Templates** tab in the main navigation
+
+#### Step 2: Start Job Import
+1. Look for the **"Import from Job"** button
+2. Click it to open the Job Lookup Modal
+
+#### Step 3: Search for Job
+1. Enter the **Job Number** (e.g., `1447`)
+2. Select **Default zzType** for items with quantity ≠ 1:
+   - **Count** (default) - For countable items
+   - **Area** - For area-based measurements (m²)
+   - **Linear** - For linear measurements (m)
+   - **Segment** - For segmented items
+3. Click **"Search"**
+
+#### Step 4: Preview Job Items
+The application will display all job items in a grid with:
+- **ItemCode** - Item code from PriceList
+- **Description** - Item description
+- **CostCentre** - Cost centre code and name
+- **Quantity** - Job quantity
+- **Unit** - Unit of measure (m, m², each, etc.)
+- **UnitPrice** - Price per unit
+- **zzType** - Automatically assigned:
+  - Quantity = 1 → `part`
+  - Quantity = 0 or > 1 → Your selected default
+
+#### Step 5: Review and Adjust
+- ✅ All items are selected by default
+- You can **deselect** items you don't want to import
+- You can **edit zzType** inline for individual items (double-click the zzType column)
+
+#### Step 6: Import as Template
+1. Click **"Import as Template"** button
+2. The job will be saved to your Templates store
+3. Success message will confirm the import
+4. The template will appear in your Templates Tab grid
+
+#### Step 7: Use the Template
+Once imported, you can:
+- View all items in the Templates Tab
+- Edit item details
+- Send items to zzTakeoff
+- Modify zzType assignments
+- Export to Excel
+
+---
+
+### Quantity-Based zzType Logic
+
+**Important:** The zzType is automatically assigned based on job quantity:
+
+| Quantity | zzType | Reasoning |
+|----------|--------|-----------|
+| **1** | `part` | Single-use item, treated as a part/component |
+| **0** | Default | No quantity, uses your selected default |
+| **> 1** | Default | Multiple units, uses your selected default |
+
+**Example:**
+- Job has Item ABC123 with Quantity = 1 → zzType = `part`
+- Job has Item XYZ456 with Quantity = 12 → zzType = `count` (if default is 'count')
+- Job has Item DEF789 with Quantity = 0 → zzType = `count` (if default is 'count')
+
+You can override this logic by manually editing the zzType for any item before importing.
+
+---
+
+### Troubleshooting Job Import
+
+#### "Job Database not found"
+**Cause:** Job Database name is incorrect or database doesn't exist
+
+**Solutions:**
+1. Go to Settings (Ctrl+,)
+2. Verify the Job Database name
+3. Check that the database exists in SQL Server:
+   ```sql
+   SELECT name FROM sys.databases WHERE name LIKE '%JOB%'
+   ```
+4. Update the Job Database field in Settings if needed
+5. Restart the application
+
+#### "No permissions to access Job Database"
+**Cause:** User doesn't have db_datareader role on Job Database
+
+**Solutions:**
+1. Re-run the `SQL_USER_SETUP.sql` script
+2. Ensure `@EnableJobDatabase = 1` in the script
+3. Verify permissions:
+   ```sql
+   USE [YOUR_JOB_DATABASE];
+   SELECT
+       dp.name AS UserName,
+       r.name AS RoleName
+   FROM sys.database_principals dp
+   LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+   LEFT JOIN sys.database_principals r ON drm.role_principal_id = r.principal_id
+   WHERE dp.name = 'dbx_user';
+   ```
+
+#### "Job 1447 not found"
+**Cause:** Job number doesn't exist in the Job Database
+
+**Solutions:**
+1. Verify the job number is correct
+2. Check jobs exist in the database:
+   ```sql
+   USE [YOUR_JOB_DATABASE];
+   SELECT DISTINCT JobNo
+   FROM Bill
+   ORDER BY JobNo DESC;
+   ```
+3. Ensure the job has items in the Bill table:
+   ```sql
+   SELECT COUNT(*) FROM Bill WHERE JobNo = '1447';
+   ```
+
+#### "No items in job"
+**Cause:** Job exists but has no items in the Bill table
+
+**Solutions:**
+1. Verify the job has been populated with items
+2. Check the job status in Databuild application
+3. Try a different job number
+
+#### "Cross-database query failed"
+**Cause:** SQL Server configuration or permissions issue
+
+**Solutions:**
+1. Verify both databases are on the same SQL Server instance
+2. Test cross-database query manually:
+   ```sql
+   USE [YOUR_SYSTEM_DATABASE];
+   SELECT TOP 1
+       b.ItemCode,
+       cc.Name
+   FROM
+       [YOUR_JOB_DATABASE].dbo.Bill b
+   LEFT JOIN
+       [YOUR_SYSTEM_DATABASE].dbo.CostCentres cc ON b.CostCentre = cc.Code
+   WHERE
+       b.JobNo = '1447';
+   ```
+3. If this fails, check database permissions and SQL Server configuration
+
+---
+
+### Best Practices
+
+**1. Verify Job Number Before Import**
+- Check the job number in Databuild application first
+- Use recent jobs for most up-to-date pricing
+
+**2. Choose Appropriate Default zzType**
+- **Count** - Most common, for general items
+- **Area** - For jobs with mostly area-based items (flooring, painting)
+- **Linear** - For jobs with linear items (piping, cabling)
+- Consider the job type when selecting default
+
+**3. Review Before Importing**
+- Preview all items to ensure correct data
+- Check cost centres are valid
+- Verify pricing looks correct
+- Deselect any unwanted items
+
+**4. Test with Small Jobs First**
+- Try importing a small job (< 50 items) first
+- Verify the process works correctly
+- Then proceed with larger jobs
+
+**5. Organize Imported Templates**
+- Name templates clearly (e.g., "Job 1447 - Office Fit-out")
+- Add notes about the job in template metadata
+- Keep templates organized by project type
 
 ---
 
