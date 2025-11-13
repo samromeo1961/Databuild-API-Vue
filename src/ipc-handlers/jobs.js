@@ -17,11 +17,25 @@ async function searchJob(jobNumber, defaultZzType, dbConfig) {
       throw new Error('Database not connected');
     }
 
+    // Diagnostic logging
+    console.log('🔍 searchJob - Config:', {
+      systemDatabase: dbConfig.systemDatabase || dbConfig.database,
+      jobDatabase: dbConfig.jobDatabase,
+      autoDetected: !dbConfig.jobDatabase
+    });
+
     // Build fully-qualified table names using query-builder
     const billTable = qualifyTable('Bill', dbConfig);
     const costCentresTable = qualifyTable('CostCentres', dbConfig);
     const priceListTable = qualifyTable('PriceList', dbConfig);
     const perCodesTable = qualifyTable('PerCodes', dbConfig);
+
+    console.log('📊 Qualified table names:', {
+      billTable,
+      costCentresTable,
+      priceListTable,
+      perCodesTable
+    });
 
     // Query job items with cross-database join
     const query = `
@@ -138,7 +152,15 @@ async function getJobsList(dbConfig) {
       throw new Error('Database not connected');
     }
 
+    // Diagnostic logging
+    console.log('🔍 getJobsList - Config:', {
+      systemDatabase: dbConfig.systemDatabase || dbConfig.database,
+      jobDatabase: dbConfig.jobDatabase,
+      autoDetected: !dbConfig.jobDatabase
+    });
+
     const ordersTable = qualifyTable('Orders', dbConfig);
+    console.log('📊 Orders table:', ordersTable);
 
     // Get all jobs from Orders table (simplified to use only JobNo)
     const query = `

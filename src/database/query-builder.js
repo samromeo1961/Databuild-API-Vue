@@ -8,10 +8,6 @@ const { getJobDatabaseName } = require('./connection');
 /**
  * Table to Database mapping
  * Defines which tables belong to which database
- *
- * NOTE: Bill, Orders, and OrderDetails are marked as 'system' because
- * in many Databuild installations these tables exist in the System database
- * rather than a separate Job database.
  */
 const TABLE_DATABASE_MAP = {
   // System Database Tables
@@ -27,10 +23,10 @@ const TABLE_DATABASE_MAP = {
   'CCBanks': 'system',
   'SuppliersPrices': 'system',
 
-  // Job/Order Tables (often in System database)
-  'Bill': 'system',
-  'Orders': 'system',
-  'OrderDetails': 'system'
+  // Job Database Tables
+  'Bill': 'job',
+  'Orders': 'job',
+  'OrderDetails': 'job'
 };
 
 /**
