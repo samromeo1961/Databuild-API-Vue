@@ -168,8 +168,54 @@ async function getJobsList(dbConfig) {
   }
 }
 
+/**
+ * Get column information for Orders table (diagnostic)
+ *
+ * @param {Object} dbConfig - Database configuration
+ * @returns {Object} Result with column information
+ */
+async function getOrdersColumns(dbConfig) {
+  try {
+    const pool = db.getPool();
+    if (!pool) {
+      throw new Error('Database not connected');
+    }
+
+    const jobDatabase = dbConfig.jobDatabase || dbConfig.database;
+
+    const query = `
+      SELECT
+        COLUMN_NAME,
+        DATA_TYPE,
+        IS_NULLABLE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'Orders'
+        AND TABLE_CATALOG = @database
+      ORDER BY ORDINAL_POSITION
+    `;
+
+    const result = await pool.request()
+      .input('database', jobDatabase)
+      .query(query);
+
+    return {
+      success: true,
+      data: result.recordset
+    };
+
+  } catch (error) {
+    console.error('Error getting Orders columns:', error);
+    return {
+      success: false,
+      message: error.message,
+      data: []
+    };
+  }
+}
+
 module.exports = {
   searchJob,
   getJobSummary,
-  getJobsList
+  getJobsList,
+  getOrdersColumns
 };

@@ -103,7 +103,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   jobs: {
     searchJob: (jobNumber, defaultZzType) => ipcRenderer.invoke('jobs:search-job', jobNumber, defaultZzType),
     getSummary: (jobNumber) => ipcRenderer.invoke('jobs:get-summary', jobNumber),
-    getList: () => ipcRenderer.invoke('jobs:get-list')
+    getList: () => ipcRenderer.invoke('jobs:get-list'),
+    getOrdersColumns: () => ipcRenderer.invoke('jobs:get-orders-columns')
   },
 
   // Templates Store (electron-store persistent storage)

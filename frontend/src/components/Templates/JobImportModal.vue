@@ -236,6 +236,12 @@ export default {
     const loadJobsList = async () => {
       loadingJobs.value = true;
       try {
+        // Diagnostic: Check what columns exist in Orders table
+        const columnsResult = await api.jobs.getOrdersColumns();
+        if (columnsResult.success) {
+          console.log('📊 Orders table columns:', columnsResult.data);
+        }
+
         const result = await api.jobs.getList();
         if (result.success && result.data) {
           jobsList.value = result.data;

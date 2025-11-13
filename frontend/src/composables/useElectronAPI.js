@@ -108,7 +108,8 @@ export function useElectronAPI() {
     jobs: {
       searchJob: (jobNumber, defaultZzType) => window.electronAPI?.jobs.searchJob(jobNumber, defaultZzType),
       getSummary: (jobNumber) => window.electronAPI?.jobs.getSummary(jobNumber),
-      getList: () => window.electronAPI?.jobs.getList()
+      getList: () => window.electronAPI?.jobs.getList(),
+      getOrdersColumns: () => window.electronAPI?.jobs.getOrdersColumns()
     },
 
     // Templates Store (electron-store persistence)

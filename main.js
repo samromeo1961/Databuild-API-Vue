@@ -792,6 +792,11 @@ ipcMain.handle('jobs:get-list', async (event) => {
   return await jobsHandlers.getJobsList(savedConfig);
 });
 
+ipcMain.handle('jobs:get-orders-columns', async (event) => {
+  const savedConfig = store.get('dbConfig');
+  return await jobsHandlers.getOrdersColumns(savedConfig);
+});
+
 // ============================================================
 // IPC Handlers for Templates Store (Persistent)
 // ============================================================
