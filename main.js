@@ -60,11 +60,47 @@ const recentsStoreHandlers = require('./src/ipc-handlers/recents-store');
 const columnStatesHandlers = require('./src/ipc-handlers/column-states');
 const zzTypeStoreHandlers = require('./src/ipc-handlers/zztype-store');
 const filterStateHandlers = require('./src/ipc-handlers/filter-state');
+const columnNamesHandlers = require('./src/ipc-handlers/column-names');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
 // Initialize electron-store for secure settings storage
 const store = new Store();
+
+/**
+ * Migrate old dbConfig to Phase 2 schema
+ * Converts { database } → { systemDatabase, jobDatabase }
+ * This ensures backward compatibility with existing configs
+ */
+function migrateDbConfig() {
+  const config = store.get('dbConfig');
+
+  if (!config) {
+    return; // No config to migrate
+  }
+
+  // Check if migration needed (has 'database' but not 'systemDatabase')
+  if (config.database && !config.systemDatabase) {
+    console.log('🔄 Migrating database config to Phase 2 schema...');
+
+    const migratedConfig = {
+      ...config,
+      systemDatabase: config.database,
+      // Keep database field for backward compatibility
+      database: config.database,
+      // jobDatabase will be auto-detected by getJobDatabaseName() if not set
+      jobDatabase: config.jobDatabase || null
+    };
+
+    store.set('dbConfig', migratedConfig);
+    console.log('✓ Database config migrated successfully');
+    console.log('  System Database:', migratedConfig.systemDatabase);
+    console.log('  Job Database:', migratedConfig.jobDatabase || 'AUTO-DETECT');
+  }
+}
+
+// Migrate config on startup
+migrateDbConfig();
 
 let mainWindow = null;
 let settingsWindow = null;
@@ -114,12 +150,20 @@ function navigateToTab(tabName, tabPath) {
     setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('navigate-to', tabPath);
-        mainWindow.focus();
+        mainWindow.restore(); // Restore if minimized
+        mainWindow.show(); // Ensure window is visible
+        mainWindow.focus(); // Bring to front
       }
     }, 1000);
   } else {
+    // Main window exists - restore, show, and focus it
+    console.log('[Navigation] Main window exists, focusing and navigating to:', tabPath);
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore(); // Restore if minimized
+    }
+    mainWindow.show(); // Ensure window is visible
+    mainWindow.focus(); // Bring to front
     mainWindow.webContents.send('navigate-to', tabPath);
-    mainWindow.focus();
   }
 
   // Update the menu to reflect the new "Back to" option
@@ -171,6 +215,10 @@ function updateZzTakeoffWindowMenu() {
           label: 'Focus Main Window',
           click: () => {
             if (mainWindow && !mainWindow.isDestroyed()) {
+              if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+              }
+              mainWindow.show();
               mainWindow.focus();
             }
           }
@@ -212,21 +260,8 @@ function updateZzTakeoffWindowMenu() {
       label: `← Back to ${lastNavigatedTab.name}`,
       accelerator: 'Ctrl+Shift+B',
       click: () => {
-        // Use navigateToTab which will recreate main window if needed
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          console.log('[Menu] Main window closed, recreating...');
-          createMainWindow();
-          // Give the window time to load before sending navigation
-          setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('navigate-to', lastNavigatedTab.path);
-              mainWindow.focus();
-            }
-          }, 1000);
-        } else {
-          mainWindow.webContents.send('navigate-to', lastNavigatedTab.path);
-          mainWindow.focus();
-        }
+        // Use navigateToTab helper which handles all window states correctly
+        navigateToTab(lastNavigatedTab.name, lastNavigatedTab.path);
       }
     }
   ]);
@@ -719,6 +754,17 @@ ipcMain.handle('filter-state:save', filterStateHandlers.handleSaveFilterState);
 ipcMain.handle('filter-state:delete', filterStateHandlers.handleDeleteFilterState);
 ipcMain.handle('filter-state:get-all', filterStateHandlers.handleGetAllFilterStates);
 ipcMain.handle('filter-state:clear-all', filterStateHandlers.handleClearAllFilterStates);
+
+// ============================================================
+// IPC Handlers for Column Names (Persistent)
+// ============================================================
+
+ipcMain.handle('column-names:get', columnNamesHandlers.getColumnNames);
+ipcMain.handle('column-names:save', columnNamesHandlers.saveColumnNames);
+ipcMain.handle('column-names:update', columnNamesHandlers.updateColumnName);
+ipcMain.handle('column-names:reset', columnNamesHandlers.resetColumnNames);
+ipcMain.handle('column-names:get-display-name', columnNamesHandlers.getDisplayName);
+ipcMain.handle('column-names:get-zztakeoff-property', columnNamesHandlers.getZzTakeoffProperty);
 
 // ============================================================
 // IPC Handlers for Templates (Database Operations)

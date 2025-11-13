@@ -231,9 +231,19 @@
             </div>
 
             <div class="form-group" id="databaseManualGroup">
-                <label for="database">Database (Manual Entry)</label>
-                <input type="text" id="database" required placeholder="CROWNESYS">
-                <div class="hint">Type database name or load from server using "Load DBs" button</div>
+                <label for="database">System Database</label>
+                <input type="text" id="database" required placeholder="CROWNESYS or T_Esys">
+                <div class="hint">Your Databuild system database (contains Catalogue, Recipes, Suppliers)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="jobDatabase">Job Database (Optional)</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                    <input type="checkbox" id="autoDetectJob" checked style="width: auto;">
+                    <label for="autoDetectJob" style="margin: 0; font-weight: normal;">Auto-detect from System Database</label>
+                </div>
+                <input type="text" id="jobDatabase" placeholder="Leave blank for auto-detect or enter: CROWNEJOB, T_EJob, etc.">
+                <div class="hint">Job database for importing jobs (auto-detects by replacing 'SYS' with 'JOB')</div>
             </div>
 
             <div class="form-group" id="databaseSelectGroup">
@@ -286,9 +296,15 @@
         ipcRenderer.invoke('db:get-saved-connection').then(config => {
             if (config) {
                 document.getElementById('server').value = config.server || '';
-                document.getElementById('database').value = config.database || '';
+                document.getElementById('database').value = config.systemDatabase || config.database || '';
                 document.getElementById('user').value = config.user || '';
                 document.getElementById('password').value = config.password || '';
+
+                // Load Job Database settings
+                if (config.jobDatabase) {
+                    document.getElementById('jobDatabase').value = config.jobDatabase;
+                    document.getElementById('autoDetectJob').checked = false;
+                }
             }
         });
 
@@ -314,9 +330,14 @@
         function getFormData() {
             // Use dropdown value if it's selected, otherwise use manual input
             const database = databaseSelect.value || databaseInput.value;
+            const autoDetect = document.getElementById('autoDetectJob').checked;
+            const jobDb = document.getElementById('jobDatabase').value;
+
             return {
                 server: document.getElementById('server').value,
                 database: database,
+                systemDatabase: database,  // Phase 2: Use systemDatabase field
+                jobDatabase: autoDetect ? null : (jobDb || null),  // null = auto-detect, empty string = explicitly none
                 user: document.getElementById('user').value,
                 password: document.getElementById('password').value
             };
@@ -441,7 +462,23 @@
             const result = await ipcRenderer.invoke('db:test-connection', config);
 
             if (result.success) {
-                showStatus('✓ ' + result.message, 'success');
+                let message = '✓ ' + result.message;
+
+                // Add Job Database details if available
+                if (result.jobDatabaseName) {
+                    message += `\n\n📊 System DB: ${config.database}`;
+                    message += `\n📦 Job DB: ${result.jobDatabaseName}`;
+                    if (result.jobDatabaseAvailable) {
+                        message += ' ✓';
+                    } else {
+                        message += ' (found but missing tables)';
+                    }
+                } else if (result.jobTables) {
+                    message += `\n\n📊 System DB: ${config.database} ✓`;
+                    message += `\n📦 Job DB: Not found (Job import unavailable)`;
+                }
+
+                showStatus(message, 'success');
             } else {
                 showStatus('✗ ' + result.message, 'error');
             }
