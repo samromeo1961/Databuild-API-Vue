@@ -38,6 +38,7 @@ async function searchJob(jobNumber, defaultZzType, dbConfig) {
     });
 
     // Query job items with cross-database join
+    // Bill table columns: JobNo, ItemCode, Quantity, UnitPrice, CostCentre, LineNumber
     const query = `
       SELECT
         b.ItemCode,
@@ -101,15 +102,16 @@ async function getJobSummary(jobNumber, dbConfig) {
     const billTable = qualifyTable('Bill', dbConfig);
 
     // Get job summary from Orders table
+    // Note: Orders table has 'Job' column (not 'JobNo')
     const query = `
       SELECT
-        o.JobNo,
+        o.Job AS JobNo,
         COUNT(b.ItemCode) AS ItemCount,
         SUM(b.Quantity * b.UnitPrice) AS TotalValue
       FROM ${ordersTable} o
-      LEFT JOIN ${billTable} b ON o.JobNo = b.JobNo
-      WHERE o.JobNo = @jobNumber
-      GROUP BY o.JobNo
+      LEFT JOIN ${billTable} b ON o.Job = b.JobNo
+      WHERE o.Job = @jobNumber
+      GROUP BY o.Job
     `;
 
     const result = await pool.request()
@@ -162,14 +164,15 @@ async function getJobsList(dbConfig) {
     const ordersTable = qualifyTable('Orders', dbConfig);
     console.log('📊 Orders table:', ordersTable);
 
-    // Get all jobs from Orders table (simplified to use only JobNo)
+    // Get all jobs from Orders table
+    // Note: Orders table has 'Job' column (not 'JobNo')
     const query = `
       SELECT TOP 500
-        JobNo,
-        '' AS Description
+        Job AS JobNo,
+        COALESCE(OrderText, '') AS Description
       FROM ${ordersTable}
-      WHERE JobNo IS NOT NULL
-      ORDER BY JobNo DESC
+      WHERE Job IS NOT NULL
+      ORDER BY CCSortOrder DESC, Job DESC
     `;
 
     const result = await pool.request().query(query);
