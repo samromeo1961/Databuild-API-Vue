@@ -1,5 +1,5 @@
 const db = require('../database/connection');
-const { qualifyTable } = require('../database/query-builder');
+const { qualifyTable, getJobDatabase } = require('../database/query-builder');
 
 /**
  * Search for a job by job number and return all job items
@@ -206,7 +206,8 @@ async function getJobDatabaseTables(dbConfig) {
       throw new Error('Database not connected');
     }
 
-    const jobDatabase = dbConfig.jobDatabase || dbConfig.database;
+    // Use query-builder helper for proper auto-detection (T_Esys → T_EJOB)
+    const jobDatabase = getJobDatabase(dbConfig);
 
     // Get all tables
     const tablesQuery = `
