@@ -31,7 +31,7 @@ async function getJobs(event) {
     const query = `
       SELECT
         j.Job_No AS JobNo,
-        j.JobName,
+        ISNULL(c.Address, 'Job ' + j.Job_No) AS JobName,
         c.Name AS Client,
         c.Address,
         c.City,
@@ -310,7 +310,7 @@ async function getOrderSummary(event, orderNumber) {
       SELECT
         '${orderNumber}' AS OrderNumber,
         j.Job_No AS JobNo,
-        j.JobName,
+        ISNULL(c.Address, 'Job ' + j.Job_No) AS JobName,
         c.Name AS Client,
         cc.Code AS CostCentre,
         cc.Name AS CostCentreName,
@@ -335,7 +335,7 @@ async function getOrderSummary(event, orderNumber) {
         AND b.Quantity > 0
       GROUP BY
         j.Job_No,
-        j.JobName,
+        c.Address,
         c.Name,
         cc.Code,
         cc.Name,
@@ -422,7 +422,7 @@ async function getJobsWithOrderCounts(event) {
     const query = `
       SELECT
         j.Job_No AS JobNo,
-        j.JobName,
+        ISNULL(c.Address, 'Job ' + j.Job_No) AS JobName,
         c.Name AS Client,
         j.Status,
         COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) AS OrderCount,
@@ -432,7 +432,7 @@ async function getJobsWithOrderCounts(event) {
       LEFT JOIN [${jobDbName}].[dbo].[Bill] b ON j.Job_No = b.JobNo AND b.Quantity > 0
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       WHERE j.Status != 'Archived'
-      GROUP BY j.Job_No, j.JobName, c.Name, j.Status
+      GROUP BY j.Job_No, c.Address, c.Name, j.Status
       HAVING COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) > 0
       ORDER BY j.Job_No DESC
     `;
