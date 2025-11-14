@@ -249,6 +249,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getCostCentres: () => ipcRenderer.invoke('purchase-orders:get-cost-centres')
   },
 
+  // Purchase Order Printing and PDF
+  poPrint: {
+    printOrder: (orderNumber, settings) => ipcRenderer.invoke('po-print:print-order', orderNumber, settings),
+    saveAsPDF: (orderNumber, settings) => ipcRenderer.invoke('po-print:save-pdf', orderNumber, settings),
+    generatePDF: (orderNumber, settings) => ipcRenderer.invoke('po-print:generate-pdf', orderNumber, settings),
+    getPDFSettings: () => ipcRenderer.invoke('po-print:get-pdf-settings')
+  },
+
   // Event listeners
   onShowHelp: (callback) => ipcRenderer.on('show-help', callback),
   onNavigateTo: (callback) => ipcRenderer.on('navigate-to', (event, path) => callback(path)),

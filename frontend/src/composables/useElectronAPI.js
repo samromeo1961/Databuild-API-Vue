@@ -253,6 +253,14 @@ export function useElectronAPI() {
       getCostCentres: () => window.electronAPI?.purchaseOrders.getCostCentres()
     },
 
+    // Purchase Order Printing and PDF
+    poPrint: {
+      printOrder: (orderNumber, settings) => window.electronAPI?.poPrint.printOrder(orderNumber, settings),
+      saveAsPDF: (orderNumber, settings) => window.electronAPI?.poPrint.saveAsPDF(orderNumber, settings),
+      generatePDF: (orderNumber, settings) => window.electronAPI?.poPrint.generatePDF(orderNumber, settings),
+      getPDFSettings: () => window.electronAPI?.poPrint.getPDFSettings()
+    },
+
     // Utility
     isElectron
   };

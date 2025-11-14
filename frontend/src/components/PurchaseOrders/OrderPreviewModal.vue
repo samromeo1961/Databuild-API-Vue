@@ -164,19 +164,51 @@ export default {
       loadPreview();
     };
 
-    const print = () => {
-      // TODO: Implement print
-      alert('Print functionality coming soon!');
+    const print = async () => {
+      loading.value = true;
+      try {
+        const result = await api.poPrint.printOrder(
+          props.orderNumber,
+          settings.value
+        );
+
+        if (!result.success) {
+          alert('Failed to print: ' + (result.message || 'Unknown error'));
+        }
+        // If successful, print dialog was already shown by Electron
+      } catch (err) {
+        console.error('Error printing order:', err);
+        alert('Error printing order: ' + err.message);
+      } finally {
+        loading.value = false;
+      }
     };
 
-    const savePDF = () => {
-      // TODO: Implement save PDF
-      alert('Save PDF functionality coming soon!');
+    const savePDF = async () => {
+      loading.value = true;
+      try {
+        const result = await api.poPrint.saveAsPDF(
+          props.orderNumber,
+          settings.value
+        );
+
+        if (result.success && !result.cancelled) {
+          alert('PDF saved successfully to: ' + result.filePath);
+        } else if (!result.cancelled) {
+          alert('Failed to save PDF: ' + (result.message || 'Unknown error'));
+        }
+        // If cancelled, do nothing (user closed the save dialog)
+      } catch (err) {
+        console.error('Error saving PDF:', err);
+        alert('Error saving PDF: ' + err.message);
+      } finally {
+        loading.value = false;
+      }
     };
 
     const showEmailDialog = () => {
-      // TODO: Implement email
-      alert('Email functionality coming soon!');
+      // TODO: Implement email (Phase 5)
+      alert('Email functionality coming in Phase 5!');
     };
 
     const closeModal = () => {

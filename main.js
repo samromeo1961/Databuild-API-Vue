@@ -65,6 +65,7 @@ const jobsHandlers = require('./src/ipc-handlers/jobs');
 const notesStoreHandlers = require('./src/ipc-handlers/notes-store');
 const poTemplatesHandlers = require('./src/ipc-handlers/po-templates');
 const purchaseOrdersHandlers = require('./src/ipc-handlers/purchase-orders');
+const poPrintHandlers = require('./src/ipc-handlers/po-print');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
@@ -1308,6 +1309,15 @@ ipcMain.handle('purchase-orders:get-order-line-items', purchaseOrdersHandlers.ge
 ipcMain.handle('purchase-orders:get-order-summary', purchaseOrdersHandlers.getOrderSummary);
 ipcMain.handle('purchase-orders:render-preview', purchaseOrdersHandlers.renderOrderPreview);
 ipcMain.handle('purchase-orders:get-cost-centres', purchaseOrdersHandlers.getCostCentres);
+
+// ============================================================
+// IPC Handlers for Purchase Order Printing/PDF
+// ============================================================
+
+ipcMain.handle('po-print:print-order', poPrintHandlers.printOrder);
+ipcMain.handle('po-print:save-pdf', poPrintHandlers.saveOrderAsPDF);
+ipcMain.handle('po-print:generate-pdf', poPrintHandlers.generateOrderPDF);
+ipcMain.handle('po-print:get-pdf-settings', poPrintHandlers.getPDFSettings);
 
 
 // ============================================================
