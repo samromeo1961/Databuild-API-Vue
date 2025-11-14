@@ -423,6 +423,7 @@ export default {
       onSelectionChanged,
       onJobSelected,
       refreshOrders,
+      previewOrder,
       previewSelected,
       printSelected,
       emailSelected

@@ -246,6 +246,11 @@ export default {
 <style scoped>
 .modal {
   background: rgba(0, 0, 0, 0.5);
+  z-index: 1050;
+}
+
+.modal-backdrop {
+  z-index: 1040;
 }
 
 .settings-bar {
