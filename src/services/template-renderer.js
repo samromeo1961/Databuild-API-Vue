@@ -220,10 +220,10 @@ class TemplateRenderer {
           o.Supplier,
           o.CCSortOrder,
           o.OrderDate,
-          j.JobNo,
-          j.JobName,
-          j.Client,
-          j.Address,
+          j.Job_No AS JobNo,
+          ISNULL(c.Address, 'Job ' + j.Job_No) AS JobName,
+          c.Name AS Client,
+          c.Address,
           j.UDF1, j.UDF2, j.UDF3, j.UDF4, j.UDF5,
           j.UDF6, j.UDF7, j.UDF8, j.UDF9, j.UDF10,
           s.SupplierName,
@@ -237,7 +237,8 @@ class TemplateRenderer {
           cc.Code AS CostCentre,
           cc.Name AS CostCentreName
         FROM [${jobDbName}].[dbo].[Orders] o
-        LEFT JOIN [${jobDbName}].[dbo].[Jobs] j ON j.JobNo = '${jobNo}'
+        LEFT JOIN [${jobDbName}].[dbo].[Jobs] j ON j.Job_No = '${jobNo}'
+        LEFT JOIN [${sysDbName}].[dbo].[Contacts] c ON j.Job_No = c.Code
         LEFT JOIN [${sysDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
         LEFT JOIN [${sysDbName}].[dbo].[CostCentres] cc ON cc.Code = '${costCentre}' AND cc.Tier = 1
         WHERE o.OrderNumber = @OrderNumber
@@ -257,10 +258,10 @@ class TemplateRenderer {
             NULL AS Supplier,
             NULL AS CCSortOrder,
             GETDATE() AS OrderDate,
-            j.JobNo,
-            j.JobName,
-            j.Client,
-            j.Address,
+            j.Job_No AS JobNo,
+            ISNULL(c.Address, 'Job ' + j.Job_No) AS JobName,
+            c.Name AS Client,
+            c.Address,
             j.UDF1, j.UDF2, j.UDF3, j.UDF4, j.UDF5,
             j.UDF6, j.UDF7, j.UDF8, j.UDF9, j.UDF10,
             NULL AS SupplierName,
@@ -274,8 +275,9 @@ class TemplateRenderer {
             cc.Code AS CostCentre,
             cc.Name AS CostCentreName
           FROM [${jobDbName}].[dbo].[Jobs] j
+          LEFT JOIN [${sysDbName}].[dbo].[Contacts] c ON j.Job_No = c.Code
           CROSS JOIN [${sysDbName}].[dbo].[CostCentres] cc
-          WHERE j.JobNo = '${jobNo}'
+          WHERE j.Job_No = '${jobNo}'
             AND cc.Code = '${costCentre}'
             AND cc.Tier = 1
         `;
