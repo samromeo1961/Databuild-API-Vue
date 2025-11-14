@@ -37,15 +37,13 @@ async function printOrder(event, orderNumber, settings = {}) {
       }
     });
 
-    // Load the HTML content
+    // Load the HTML content and wait for it to finish loading
     await printWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
-    // Wait for content to load
-    await new Promise(resolve => {
-      printWindow.webContents.on('did-finish-load', resolve);
-    });
+    // Give a moment for rendering to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Open print dialog
     const printed = await printWindow.webContents.print({
@@ -121,15 +119,13 @@ async function saveOrderAsPDF(event, orderNumber, settings = {}) {
       }
     });
 
-    // Load the HTML content
+    // Load the HTML content and wait for it to finish loading
     await pdfWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
-    // Wait for content to load
-    await new Promise(resolve => {
-      pdfWindow.webContents.on('did-finish-load', resolve);
-    });
+    // Give a moment for rendering to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Generate PDF with settings
     const pdfData = await pdfWindow.webContents.printToPDF({
@@ -191,15 +187,13 @@ async function generateOrderPDF(event, orderNumber, settings = {}) {
       }
     });
 
-    // Load the HTML content
+    // Load the HTML content and wait for it to finish loading
     await pdfWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
-    // Wait for content to load
-    await new Promise(resolve => {
-      pdfWindow.webContents.on('did-finish-load', resolve);
-    });
+    // Give a moment for rendering to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Generate PDF
     const pdfData = await pdfWindow.webContents.printToPDF({
