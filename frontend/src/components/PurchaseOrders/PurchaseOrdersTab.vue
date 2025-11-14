@@ -167,7 +167,7 @@
 <script>
 import { ref, computed, onMounted, inject } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
-import { useElectronAPI } from '@/composables/useElectronAPI';
+import { useElectronAPI } from '../../composables/useElectronAPI';
 import JobSelector from './JobSelector.vue';
 import TemplateGallery from './TemplateGallery.vue';
 import OrderPreviewModal from './OrderPreviewModal.vue';

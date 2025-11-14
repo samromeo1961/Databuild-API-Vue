@@ -111,7 +111,7 @@
 
 <script>
 import { ref, onMounted, watch } from 'vue';
-import { useElectronAPI } from '@/composables/useElectronAPI';
+import { useElectronAPI } from '../../composables/useElectronAPI';
 
 export default {
   name: 'OrderPreviewModal',

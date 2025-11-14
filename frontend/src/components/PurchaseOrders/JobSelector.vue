@@ -113,7 +113,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
-import { useElectronAPI } from '@/composables/useElectronAPI';
+import { useElectronAPI } from '../../composables/useElectronAPI';
 
 export default {
   name: 'JobSelector',

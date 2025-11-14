@@ -98,7 +98,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { useElectronAPI } from '@/composables/useElectronAPI';
+import { useElectronAPI } from '../../composables/useElectronAPI';
 
 export default {
   name: 'TemplateGallery',
