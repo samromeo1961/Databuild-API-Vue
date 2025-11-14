@@ -21,9 +21,8 @@ async function printOrder(event, orderNumber, settings = {}) {
   try {
     console.log('Print order:', orderNumber, settings);
 
-    // Get the rendered HTML
-    const renderer = new templateRenderer();
-    const html = await renderer.renderOrder(
+    // Get the rendered HTML (templateRenderer is already instantiated singleton)
+    const html = await templateRenderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
@@ -82,9 +81,8 @@ async function saveOrderAsPDF(event, orderNumber, settings = {}) {
   try {
     console.log('Save order as PDF:', orderNumber, settings);
 
-    // Get the rendered HTML
-    const renderer = new templateRenderer();
-    const html = await renderer.renderOrder(
+    // Get the rendered HTML (templateRenderer is already instantiated singleton)
+    const html = await templateRenderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
@@ -177,9 +175,8 @@ async function generateOrderPDF(event, orderNumber, settings = {}) {
   try {
     console.log('Generate order PDF:', orderNumber);
 
-    // Get the rendered HTML
-    const renderer = new templateRenderer();
-    const html = await renderer.renderOrder(
+    // Get the rendered HTML (templateRenderer is already instantiated singleton)
+    const html = await templateRenderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
