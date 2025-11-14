@@ -312,12 +312,14 @@ class TemplateRenderer {
           b.ItemCode,
           b.CostCentre,
           b.Quantity,
-          b.UnitPrice,
+          b.UnitPrice AS CatalogPrice,
+          ISNULL(sp.Price, b.UnitPrice) AS UnitPrice,
+          sp.Price AS SupplierPrice,
           b.XDescription AS Workup,
           pl.Description,
           pc.Printout AS Unit,
           sp.Reference AS SupplierReference,
-          (b.Quantity * b.UnitPrice) AS LineTotal
+          (b.Quantity * ISNULL(sp.Price, b.UnitPrice)) AS LineTotal
         FROM [${jobDbName}].[dbo].[Bill] b
         LEFT JOIN [${sysDbName}].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
         LEFT JOIN [${sysDbName}].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
@@ -412,8 +414,14 @@ class TemplateRenderer {
         break;
 
       case 'supplierOnly':
-        // Only show items that have supplier-specific prices
-        modified.items = modified.items.filter(item => item.SupplierReference);
+        // Show supplier prices (already using ISNULL(sp.Price, b.UnitPrice) from query)
+        // Items already have correct pricing - supplier price with catalog fallback
+        // Mark items with supplier prices for visual indication if needed
+        modified.items = modified.items.map(item => ({
+          ...item,
+          hasSupplierPrice: item.SupplierPrice !== null,
+          priceSource: item.SupplierPrice !== null ? 'supplier' : 'catalog'
+        }));
         break;
 
       case 'all':

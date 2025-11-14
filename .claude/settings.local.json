@@ -8,7 +8,8 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nAdd comprehensive Purchase Order Management documentation\n\nThis major update to CLAUDE.md documents the complete Purchase Order \nManagement system, including:\n\nPhase 1: Data Foundation\n- Jobs and estimates integration\n- Cost centre-based ordering\n- Visual status indicators (Blue=Logged, Green=To Order)\n\nPhase 2: Supplier Relationship Management\n- Preferred Suppliers module (CCSuppliers table)\n- Supplier details integration\n- Item reference display options\n\nPhase 3: Purchase Order Workflow\n- Order display and allocation\n- Price management and override functionality\n- Notes system (Standard, Global, Workup)\n- User Defined Fields (UDF) support\n- Order logging and immutability rules\n\nPhase 4: Order Output and Printing\n- Multiple output types (PO, RFQ variants)\n- RTF template system with variable substitution\n- Price display configurations\n- GST handling options\n- Email functionality\n\nAlso added:\n- New database tables: Jobs, CCSuppliers, StandardNotes, GlobalNotes\n- Complete schema documentation for PO-related tables\n- SQL query patterns for common PO operations\n- Development checklist for backend/frontend components\n- Persistent storage for PO settings and templates\n- Database integrity rules and cross-database query patterns\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(npm install:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []
