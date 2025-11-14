@@ -128,8 +128,17 @@ class TemplateRenderer {
       const templatePath = this.getTemplatePath(templateName);
       const template = await this.loadTemplate(templatePath);
 
-      // 2. Gather complete order data from database
-      const orderData = await this.gatherOrderData(orderNumber);
+      // 2. Gather complete order data from database (or use sample data for demo orders)
+      let orderData;
+      if (orderNumber && orderNumber.startsWith('DEMO')) {
+        console.log('Using sample data for demo order:', orderNumber);
+        orderData = this.getSampleData();
+        // Update the order number to match the requested one
+        orderData.orderNumber = orderNumber;
+        orderData.job.jobNo = orderNumber.split('/')[0];
+      } else {
+        orderData = await this.gatherOrderData(orderNumber);
+      }
 
       // 3. Apply price display settings
       const processedData = this.applyPriceSettings(orderData, settings);

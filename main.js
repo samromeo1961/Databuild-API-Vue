@@ -66,6 +66,7 @@ const notesStoreHandlers = require('./src/ipc-handlers/notes-store');
 const poTemplatesHandlers = require('./src/ipc-handlers/po-templates');
 const purchaseOrdersHandlers = require('./src/ipc-handlers/purchase-orders');
 const poPrintHandlers = require('./src/ipc-handlers/po-print');
+const poDiagnosticsHandlers = require('./src/ipc-handlers/po-diagnostics');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
@@ -1318,6 +1319,13 @@ ipcMain.handle('po-print:print-order', poPrintHandlers.printOrder);
 ipcMain.handle('po-print:save-pdf', poPrintHandlers.saveOrderAsPDF);
 ipcMain.handle('po-print:generate-pdf', poPrintHandlers.generateOrderPDF);
 ipcMain.handle('po-print:get-pdf-settings', poPrintHandlers.getPDFSettings);
+
+// ============================================================
+// IPC Handlers for Purchase Order Diagnostics
+// ============================================================
+
+ipcMain.handle('po-diagnostics:check-data', poDiagnosticsHandlers.checkPOData);
+ipcMain.handle('po-diagnostics:get-sample-data', poDiagnosticsHandlers.getSamplePOData);
 
 
 // ============================================================

@@ -57,6 +57,72 @@ async function getJobs(event) {
  */
 async function getOrdersForJob(event, jobNo) {
   try {
+    // Handle sample/demo data
+    if (jobNo && jobNo.startsWith('DEMO')) {
+      console.log('Returning sample orders for demo job:', jobNo);
+      return {
+        success: true,
+        orders: [
+          {
+            OrderNumber: `${jobNo}/Plumb.1`,
+            CostCentre: 'Plumb',
+            CostCentreName: 'Plumbing',
+            SupplierName: 'ABC Plumbing Supplies',
+            ItemCount: 12,
+            OrderTotal: 15750.50,
+            OrderDate: new Date().toISOString(),
+            IsLogged: 0,
+            SortOrder: 100
+          },
+          {
+            OrderNumber: `${jobNo}/Elec.1`,
+            CostCentre: 'Elec',
+            CostCentreName: 'Electrical',
+            SupplierName: 'XYZ Electrical Wholesale',
+            ItemCount: 8,
+            OrderTotal: 8950.00,
+            OrderDate: new Date().toISOString(),
+            IsLogged: 1,
+            SortOrder: 200
+          },
+          {
+            OrderNumber: `${jobNo}/Carp.1`,
+            CostCentre: 'Carp',
+            CostCentreName: 'Carpentry',
+            SupplierName: 'Timber & Hardware Co',
+            ItemCount: 25,
+            OrderTotal: 22300.75,
+            OrderDate: new Date().toISOString(),
+            IsLogged: 0,
+            SortOrder: 300
+          },
+          {
+            OrderNumber: `${jobNo}/Paint.1`,
+            CostCentre: 'Paint',
+            CostCentreName: 'Painting',
+            SupplierName: 'Premier Paint Supplies',
+            ItemCount: 15,
+            OrderTotal: 4275.00,
+            OrderDate: new Date().toISOString(),
+            IsLogged: 1,
+            SortOrder: 400
+          },
+          {
+            OrderNumber: `${jobNo}/Conc.1`,
+            CostCentre: 'Conc',
+            CostCentreName: 'Concrete',
+            SupplierName: 'Metro Concrete Solutions',
+            ItemCount: 6,
+            OrderTotal: 18500.00,
+            OrderDate: new Date().toISOString(),
+            IsLogged: 0,
+            SortOrder: 500
+          }
+        ],
+        isSampleData: true
+      };
+    }
+
     const pool = getPool();
     if (!pool) {
       return { success: false, message: 'Database connection not available' };
@@ -350,6 +416,42 @@ async function getJobsWithOrderCounts(event) {
     `;
 
     const result = await pool.request().query(query);
+
+    // If no real data, return sample data for testing
+    if (result.recordset.length === 0) {
+      console.log('No jobs found in database, returning sample data for testing');
+      return {
+        success: true,
+        jobs: [
+          {
+            JobNo: 'DEMO001',
+            JobName: 'Sample Commercial Build - 123 Main Street',
+            Client: 'Demo Construction Pty Ltd',
+            Status: 'Active',
+            OrderCount: 5,
+            LoggedCount: 2
+          },
+          {
+            JobNo: 'DEMO002',
+            JobName: 'Residential Renovation - Smith Residence',
+            Client: 'Smith & Associates',
+            Status: 'Active',
+            OrderCount: 3,
+            LoggedCount: 1
+          },
+          {
+            JobNo: 'DEMO003',
+            JobName: 'Office Fitout - CBD Tower Level 8',
+            Client: 'Corporate Solutions Ltd',
+            Status: 'Active',
+            OrderCount: 4,
+            LoggedCount: 3
+          }
+        ],
+        isSampleData: true,
+        message: 'No jobs found in database - showing sample data for testing'
+      };
+    }
 
     return {
       success: true,
