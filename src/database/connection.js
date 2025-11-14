@@ -166,7 +166,21 @@ function getPool() {
  * @param {Object} dbConfig - Database configuration
  * @returns {string|null} Job database name or null if not configured
  */
-function getJobDatabaseName(dbConfig) {
+function getJobDatabaseName(dbConfig = null) {
+  // If no config provided, try to get it from the pool
+  if (!dbConfig) {
+    if (dbPool && dbPool.config) {
+      // Reconstruct dbConfig from pool config
+      dbConfig = {
+        database: dbPool.config.database,
+        systemDatabase: dbPool.config.database,
+        jobDatabase: dbPool.config.jobDatabase // This might be undefined
+      };
+    } else {
+      return null;
+    }
+  }
+
   // If explicitly configured, use it
   if (dbConfig.jobDatabase) {
     return dbConfig.jobDatabase;
