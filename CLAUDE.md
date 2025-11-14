@@ -135,7 +135,7 @@ If `jobDatabase` is not specified, the app attempts to auto-detect it by replaci
 
 **Entry Point:** `frontend/src/main.js`
 
-**Router:** Vue Router with 8 tab-based routes (Catalogue, Recipes, Suppliers, Contacts, Templates, Favourites, Recents, zzTakeoff Web)
+**Router:** Vue Router with 9 tab-based routes (Catalogue, Recipes, Suppliers, Contacts, Templates, Purchase Orders, Favourites, Recents, zzTakeoff Web)
 
 **Component Structure:**
 ```
@@ -146,6 +146,7 @@ App.vue (root layout with tabs)
   │   ├── Suppliers/SuppliersTab.vue
   │   ├── Contacts/ContactsTab.vue
   │   ├── Templates/TemplatesTab.vue
+  │   ├── PurchaseOrders/PurchaseOrdersTab.vue
   │   ├── Favourites/FavouritesTab.vue
   │   ├── Recents/RecentsTab.vue
   │   └── ZzTakeoff/ZzTakeoffWebTab_Window.vue
@@ -157,6 +158,9 @@ App.vue (root layout with tabs)
       ├── Contacts/ContactModal.vue
       ├── Preferences/PreferencesModal.vue
       ├── Templates/JobImportModal.vue
+      ├── PurchaseOrders/PreferredSuppliersModal.vue
+      ├── PurchaseOrders/OrderNotesModal.vue
+      ├── PurchaseOrders/OrderPreviewModal.vue
       └── Help/HelpModal.vue
 ```
 
@@ -187,6 +191,10 @@ App.vue (root layout with tabs)
 - `Bill` - Job line items with quantities and prices
 - `Orders` - Job orders with supplier and cost centre sort order
 - `OrderDetails` - Order detail descriptions
+- `Jobs` - Job master records (job codes, descriptions, status)
+- `StandardNotes` - Reusable notes for purchase orders
+- `GlobalNotes` - Notes that appear on every purchase order
+- `CCSuppliers` - Preferred suppliers per cost centre (many-to-many relationship)
 
 **Important SQL Query Pattern:**
 Use LEFT JOINs starting from PriceList to avoid filtering out items without matching cost centres. The Tier 1 filter should be in the JOIN ON condition, not WHERE clause.
@@ -373,6 +381,38 @@ Supplier-specific pricing. Key fields:
 - `Area` (nvarchar(24)) - Geographic area
 - `PriceLevel` (int) - Price level
 
+#### Jobs (Job Database)
+Job master records. Key fields:
+- `JobNo` (PK, nvarchar(10)) - Job number/code
+- `JobName` (nvarchar(120)) - Job description/name
+- `Status` (nvarchar(20)) - Job status (Active, Archived, etc.)
+- `Client` (nvarchar(96)) - Client name
+- `Address` (nvarchar(255)) - Job site address
+- `StartDate` (datetime) - Project start date
+- `UDF1` through `UDF10` (nvarchar) - User-defined fields for notes
+
+#### CCSuppliers (System Database)
+Preferred suppliers per cost centre (many-to-many). Key fields:
+- `CostCentre` (PK, nvarchar(10)) - Cost centre code
+- `Supplier` (PK, nvarchar(8)) - Supplier code
+- `SortOrder` (int) - Display order in preferred list
+
+**Important:** Only suppliers in this table can be selected for purchase orders for that cost centre.
+
+#### StandardNotes (Job/System Database)
+Reusable notes for purchase orders. Key fields:
+- `NoteCode` (PK, nvarchar(8)) - Note identifier (max 8 chars)
+- `NoteText` (ntext) - Note content
+- `Category` (nvarchar(20)) - Note category/grouping
+
+**Note:** Can contain User Defined Fields (UDFs) like `[job udf1]` which are replaced with actual job data when processed.
+
+#### GlobalNotes (Job/System Database)
+Notes that automatically appear on every purchase order. Key fields:
+- `NoteCode` (PK, nvarchar(8)) - Note identifier
+- `NoteText` (ntext) - Note content
+- `Active` (bit) - Whether note is currently active
+
 **Query Patterns:**
 
 **Get Catalogue with Latest Prices:**
@@ -466,6 +506,9 @@ ORDER BY o.CCSortOrder, b.CostCentre, b.LineNumber
    - `column-names.json` - Custom column name mappings
    - `filter-state.json` - Filter states per tab
    - `zztype-store.json` - zzTakeoff type mappings
+   - `po-settings.json` - Purchase Order display preferences (price display, GST, format)
+   - `po-templates.json` - RTF/PDF template storage for purchase orders
+   - `email-settings.json` - Email configuration and templates for PO emailing
 
 Each store has:
 - Database layer: `src/database/[feature]-store.js`
@@ -563,6 +606,326 @@ When implementing features that need to query the Job Database:
      return { success: false, message: 'Job Database not configured' };
    }
    ```
+
+## Purchase Order Management (Major Feature)
+
+The Purchase Order Management system provides a complete alternative front-end for Databuild's ordering routines. This is a major undertaking that replicates and enhances the functional flow of Databuild's native PO system while maintaining full database compatibility.
+
+### Overview
+
+**Key Principle:** The Databuild database is not just a data repository—it's a **rules engine**. The PO system must follow the established "tracks" (Cost Centres, Preferred Suppliers, logging rules) defined by Databuild. The new front-end builds a modern interface that adheres to these established rules and signaling systems.
+
+**Prerequisites:**
+- Job Database connectivity (Phase 2) must be configured
+- Jobs must have completed estimates (Bill of Quantities)
+- Cost Centres must be properly set up
+- Suppliers must be configured with contact details
+
+### Phase 1: Data Foundation
+
+Purchase order processing requires proper foundation data in the Databuild database:
+
+#### Jobs and Estimates
+- PO processing assumes a Job exists in the `Jobs` table
+- The estimate (Bill of Quantities) must be completed in the `Bill` table
+- Front-end must reference quantities entered in Bill of Quantities
+- Display order details organized by Job and Cost Centre
+
+#### Cost Centres
+- Orders are generated BY Cost Centre (not by Job alone)
+- Front-end workflow: Select Job → Display orders grouped by Cost Centre
+- Each Cost Centre with quantities in the Bill becomes an order line
+- Visual status indicators:
+  - **Blue** = 'Logged' orders (processed/real orders)
+  - **Green** = 'To Order' (pending orders)
+
+#### Catalogue and Recipe Integration
+- Items must display internal code, description, and Unit of Measure
+- Recipes (groups of items) must expand correctly if used in estimates
+- Link to existing Catalogue and Recipe data already in application
+
+### Phase 2: Supplier Relationship Management
+
+The system relies on linking Cost Centres to authorized Suppliers.
+
+#### Preferred Suppliers Module
+**Critical Feature:** Only suppliers in the Preferred Suppliers list can be selected for orders.
+
+**Implementation Requirements:**
+1. Dedicated UI section for Preferred Suppliers management
+2. Workflow: Select Cost Centre → Add/Remove Suppliers to preferred list
+3. Data stored in `CCSuppliers` table (Cost Centre + Supplier many-to-many)
+4. Drag-and-drop functionality for adding suppliers (Databuild pattern)
+5. Sort order management for display preference
+
+**Database Pattern:**
+```sql
+-- Get preferred suppliers for a cost centre
+SELECT
+  s.Supplier_Code,
+  s.SupplierName,
+  cs.SortOrder
+FROM CCSuppliers cs
+INNER JOIN Supplier s ON cs.Supplier = s.Supplier_Code
+WHERE cs.CostCentre = @CostCentreCode
+ORDER BY cs.SortOrder
+```
+
+#### Supplier Details Integration
+- Read Supplier Details, especially the Orders panel
+- Determine output format preferences per supplier
+- Check if supplier accepts emailed POs (processing default)
+- Access supplier `Area` for regional RFQ distribution
+
+#### Item References on Orders
+Display configuration for item codes:
+- **Show Our Code** - Internal catalogue code (PriceCode)
+- **Show Supplier Reference** - Supplier's reference from SuppliersPrices
+- **Show Both** - Display both codes on order
+
+### Phase 3: Purchase Order Workflow
+
+The workflow facilitates viewing, updating, allocating, and preparing orders for processing.
+
+#### 3.1 Order Display and Allocation
+
+**Order View Structure:**
+- Display orders grouped by Job Code (expandable tree)
+- When expanded, show all Cost Centres with quantities
+- Each Cost Centre represents a potential order
+
+**Status Indication:**
+- 'Logged' cost centres: **Blue** (order has been processed/is "real")
+- 'To Order' cost centres: **Green** (pending, not yet logged)
+
+**Supplier Nomination:**
+- Click into Supplier field for each order (Cost Centre)
+- Select from Preferred Suppliers list for that Cost Centre
+- Cannot select suppliers not in CCSuppliers for that Cost Centre
+
+**Order Numbering Convention:**
+Format: `JobNo/CostCentre.BLoad`
+- Example: `001/Plumb.2` (Job 001, Plumbing cost centre, Load 2)
+- Enforce this format even if user attempts manual entry
+- Stored in `Orders.OrderNumber` field
+
+#### 3.2 Price Management and Integrity
+
+**Price Update Functionality:**
+- Implement "Price Unlogged Orders" feature
+- Update order totals before placing order
+- Refresh prices from Catalogue if they've changed
+- Only update unlogged orders (logged orders are immutable)
+
+**Manual Price Override:**
+- Allow manual price entry to override supplier/catalogue prices
+- Store override in `Bill.UnitPrice`
+- Visual indicator when price is manually overridden
+- Preserve manual prices through update operations
+
+**Price Sources (priority order):**
+1. Manual override (if set)
+2. Supplier-specific price (from SuppliersPrices)
+3. Latest catalogue price (from Prices table)
+
+#### 3.3 Notes and Custom Data Integration
+
+**Standard Notes:**
+- Access and attach Standard Notes to specific orders/cost centres
+- Notes stored in `StandardNotes` table
+- 8-character limit for note codes/names
+- Searchable/filterable note library
+
+**Global Notes:**
+- Notes that appear on EVERY order automatically
+- Stored in `GlobalNotes` table with `Active` flag
+- Applied during order generation
+- Can be toggled on/off without deletion
+
+**User Defined Fields (UDFs):**
+- Notes can contain variables like `[job udf1]`, `[job udf2]`, etc.
+- Variables replaced with actual job data when order is processed
+- UDF values stored in `Jobs.UDF1` through `Jobs.UDF10`
+- Example: `[job udf1]` → "Site Address: 123 Main St"
+
+**Workup Notes:**
+- Item-specific notes that appear below that item on the order
+- Stored in `Bill.XDescription` field
+- Display inline with order items
+- Support for rich text formatting
+
+#### 3.4 Order Processing and Logging
+
+**Order Logging:**
+- "Logging" an order marks it as processed/real
+- Logged orders are immutable (cannot be edited)
+- Status change: Green (To Order) → Blue (Logged)
+- **Important:** If logging option is ticked, logging may occur even when previewing
+
+**Date Stamping:**
+- Put today's date on orders logged today
+- Store in `Orders` table with timestamp
+- Used for order tracking and reporting
+
+**Logging Triggers:**
+- Explicit "Log Order" button
+- Optional: Auto-log on preview (user configurable)
+- Batch logging: Log multiple orders at once
+
+### Phase 4: Order Output and Printing
+
+The final step generates required output documents (POs or RFQs).
+
+#### Output Type Selection
+
+**Document Types:**
+1. **Purchase Order** - Standard PO to nominated supplier
+2. **Request for Quote - Current Supplier** - RFQ to nominated supplier only
+3. **Request for Quote - ALL Preferred Suppliers** - RFQ to all suppliers in CCSuppliers for that cost centre
+4. **Request for Quote - Preferred Suppliers in AREA** - RFQ to suppliers matching specific Area (from Supplier.Area field)
+
+#### Output Format Support
+
+**Primary Format: Rich Text Format (RTF)**
+- Fully user-definable layouts
+- Priority over Crystal Reports
+- Modifiable templates to suit requirements
+- Stored in application resources or user directory
+
+**Template Variables:**
+Standard template variables that get replaced:
+- Job fields: `{JobNo}`, `{JobName}`, `{Client}`, `{Address}`
+- Order fields: `{OrderNumber}`, `{OrderDate}`, `{Supplier}`
+- Cost Centre: `{CostCentre}`, `{CostCentreName}`
+- Line items: `{ItemCode}`, `{Description}`, `{Quantity}`, `{Unit}`, `{UnitPrice}`, `{LineTotal}`
+- UDFs: `{UDF1}` through `{UDF10}`
+
+#### Price Display Configuration
+
+**Display Options:**
+1. **Show All Prices** - Item prices AND total price
+2. **Show Total Prices Only** - No line item prices, one total at bottom
+3. **Show No Prices** - Completely hide all pricing (for RFQs)
+4. **Supplier Prices Only** - Only show if supplier-specific price exists in SuppliersPrices
+
+**GST Handling:**
+1. **NO GST** - No tax calculation or display
+2. **Add GST to Each Line** - GST per line item + total at end
+3. **Total Lines, Add GST at End** - Most commonly used option
+
+#### Emailing Orders
+
+**Email Functionality:**
+- Use supplier's email preference from `Supplier.AccountEmail`
+- Check `Orders` panel in Supplier Details for format preference
+- Processing default: Email vs. Print
+- Attach PDF/RTF document to email
+- Support batch emailing multiple orders
+- Track email status (sent/failed/pending)
+
+**Email Template:**
+- Configurable subject line with variable substitution
+- Body text with order summary
+- Attachment: Generated PO/RFQ document
+
+### Database Integrity Rules
+
+**Critical Rules to Maintain:**
+
+1. **Order Numbering:** Always use `JobNo/CostCentre.BLoad` format
+2. **Supplier Restriction:** Only allow selection from CCSuppliers for that Cost Centre
+3. **Logging Immutability:** Once logged, orders cannot be edited (only viewed)
+4. **Status Tracking:** Maintain accurate logged vs. unlogged status
+5. **Cross-Database Joins:** Always use fully qualified names for Job+System DB queries
+
+### Development Checklist
+
+**Backend (IPC Handlers):**
+- [ ] `src/ipc-handlers/purchase-orders.js` - Main PO operations
+- [ ] `src/ipc-handlers/preferred-suppliers.js` - CCSuppliers management
+- [ ] `src/ipc-handlers/order-notes.js` - Standard/Global notes
+- [ ] `src/ipc-handlers/order-output.js` - PDF/RTF generation, email
+
+**Frontend (Vue Components):**
+- [ ] `PurchaseOrdersTab.vue` - Main PO grid with job/cost centre tree
+- [ ] `PreferredSuppliersModal.vue` - Manage CCSuppliers relationships
+- [ ] `OrderNotesModal.vue` - Attach standard/global notes
+- [ ] `OrderPreviewModal.vue` - Preview before logging/sending
+- [ ] `PriceUpdateDialog.vue` - Price refresh functionality
+
+**Database Queries:**
+- [ ] Get orders by job (with Bill quantities)
+- [ ] Get preferred suppliers for cost centre
+- [ ] Update prices from catalogue
+- [ ] Log orders (status change)
+- [ ] Get standard/global notes
+- [ ] Replace UDF variables in notes
+
+**Persistent Storage:**
+- [ ] `po-settings.json` - PO display preferences (price display, GST, format)
+- [ ] `po-templates.json` - RTF template storage
+- [ ] `email-settings.json` - Email configuration and templates
+
+### Query Patterns for Purchase Orders
+
+**Get Orders for a Job (Unlogged Only):**
+```sql
+SELECT
+  b.JobNo,
+  b.CostCentre,
+  cc.Name AS CostCentreName,
+  b.BLoad,
+  CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
+  b.ItemCode,
+  pl.Description,
+  b.Quantity,
+  pc.Printout AS Unit,
+  b.UnitPrice,
+  b.XDescription AS Workup,
+  o.Supplier,
+  s.SupplierName,
+  CASE WHEN o.OrderNumber IS NULL THEN 0 ELSE 1 END AS IsLogged
+FROM [${jobDbName}].[dbo].[Bill] b
+LEFT JOIN [${systemDbName}].[dbo].[PriceList] pl ON b.ItemCode = pl.PriceCode
+LEFT JOIN [${systemDbName}].[dbo].[PerCodes] pc ON pl.PerCode = pc.Code
+LEFT JOIN [${systemDbName}].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
+LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
+LEFT JOIN [${systemDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
+WHERE b.JobNo = @JobNo
+  AND b.Quantity > 0
+ORDER BY cc.SortOrder, b.CostCentre, b.LineNumber
+```
+
+**Log an Order:**
+```sql
+-- Insert or update Orders table
+IF NOT EXISTS (SELECT 1 FROM Orders WHERE OrderNumber = @OrderNumber)
+BEGIN
+  INSERT INTO Orders (OrderNumber, Supplier, CCSortOrder, OrderDate)
+  VALUES (@OrderNumber, @SupplierCode, @CCSortOrder, GETDATE())
+END
+ELSE
+BEGIN
+  UPDATE Orders
+  SET Supplier = @SupplierCode, OrderDate = GETDATE()
+  WHERE OrderNumber = @OrderNumber
+END
+```
+
+**Get Preferred Suppliers with Area Filter:**
+```sql
+SELECT
+  s.Supplier_Code,
+  s.SupplierName,
+  s.AccountEmail,
+  s.AccountPhone,
+  cs.SortOrder
+FROM CCSuppliers cs
+INNER JOIN Supplier s ON cs.Supplier = s.Supplier_Code
+WHERE cs.CostCentre = @CostCentreCode
+  AND (@Area IS NULL OR s.Area = @Area)
+ORDER BY cs.SortOrder
+```
 
 ## File Locations
 
