@@ -282,6 +282,25 @@ async function switchDatabase(newDatabase, savedConfig) {
 }
 
 /**
+ * Get the System Database name
+ * Returns the configured system database or the main database name
+ * @param {Object} dbConfig - Optional database configuration (uses global config if not provided)
+ * @returns {string|null} System database name
+ */
+function getSystemDatabaseName(dbConfig = null) {
+  if (dbConfig) {
+    return dbConfig.systemDatabase || dbConfig.database;
+  }
+
+  // If no config provided, try to get from current pool
+  if (dbPool && dbPool.config && dbPool.config.database) {
+    return dbPool.config.database;
+  }
+
+  return null;
+}
+
+/**
  * Close database connection
  */
 async function close() {
@@ -298,5 +317,6 @@ module.exports = {
   switchDatabase,
   getPool,
   getJobDatabaseName,
+  getSystemDatabaseName,
   close
 };

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Purchase Order {{OrderNumber}}</title>
+  <style>
+    :root {
+      --primary-color: {{#if customizations.colors.primary}}{{customizations.colors.primary}}{{else}}#003366{{/if}};
+      --secondary-color: {{#if customizations.colors.secondary}}{{customizations.colors.secondary}}{{else}}#0066cc{{/if}};
+      --text-color: {{#if customizations.colors.text}}{{customizations.colors.text}}{{else}}#333333{{/if}};
+      --background-color: {{#if customizations.colors.background}}{{customizations.colors.background}}{{else}}#ffffff{{/if}};
+      --header-font: {{#if customizations.fonts.header}}{{customizations.fonts.header}}{{else}}Arial, sans-serif{{/if}};
+      --body-font: {{#if customizations.fonts.body}}{{customizations.fonts.body}}{{else}}Helvetica, Arial, sans-serif{{/if}};
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--body-font);
+      font-size: 11pt;
+      color: var(--text-color);
+      background: var(--background-color);
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: white;
+      padding: 20mm;
+    }
+
+    /* Header Section */
+    .header {
+      border-bottom: 3px solid var(--primary-color);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .company-info {
+      flex: 1;
+    }
+
+    .company-logo {
+      max-height: 80px;
+      max-width: 200px;
+      margin-bottom: 10px;
+    }
+
+    .company-name {
+      font-family: var(--header-font);
+      font-size: 24pt;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 5px;
+    }
+
+    .company-tagline {
+      font-size: 10pt;
+      color: #666;
+      font-style: italic;
+    }
+
+    .document-title {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .document-title h1 {
+      font-family: var(--header-font);
+      font-size: 28pt;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 5px;
+    }
+
+    .document-title .po-number {
+      font-size: 12pt;
+      color: #666;
+    }
+
+    /* Info Section */
+    .info-section {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 25px;
+      gap: 30px;
+    }
+
+    .info-box {
+      flex: 1;
+    }
+
+    .info-box h3 {
+      font-family: var(--header-font);
+      font-size: 12pt;
+      color: var(--primary-color);
+      margin-bottom: 10px;
+      border-bottom: 2px solid var(--secondary-color);
+      padding-bottom: 5px;
+    }
+
+    .info-row {
+      display: flex;
+      margin-bottom: 5px;
+      font-size: 10pt;
+    }
+
+    .info-label {
+      font-weight: bold;
+      min-width: 120px;
+      color: #555;
+    }
+
+    .info-value {
+      flex: 1;
+    }
+
+    /* Supplier Box */
+    .supplier-box {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-left: 4px solid var(--secondary-color);
+    }
+
+    /* Line Items Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 25px 0;
+      font-size: 10pt;
+    }
+
+    thead {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    th {
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: bold;
+      font-size: 10pt;
+    }
+
+    th.align-right {
+      text-align: right;
+    }
+
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    td.align-right {
+      text-align: right;
+    }
+
+    tbody tr:hover {
+      background-color: #f5f5f5;
+    }
+
+    .workup-row td {
+      padding: 5px 8px 8px 30px;
+      font-style: italic;
+      color: #666;
+      font-size: 9pt;
+      border-bottom: none;
+      background-color: #fafafa;
+    }
+
+    /* Totals Section */
+    .totals-section {
+      margin-top: 20px;
+      margin-left: auto;
+      width: 300px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 11pt;
+    }
+
+    .total-label {
+      font-weight: bold;
+      color: #555;
+    }
+
+    .total-value {
+      text-align: right;
+      min-width: 120px;
+    }
+
+    .grand-total {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 2px solid var(--primary-color);
+      font-size: 14pt;
+      font-weight: bold;
+      color: var(--primary-color);
+    }
+
+    /* Notes Section */
+    .notes-section {
+      margin-top: 30px;
+      page-break-inside: avoid;
+    }
+
+    .notes-section h3 {
+      font-family: var(--header-font);
+      font-size: 12pt;
+      color: var(--primary-color);
+      margin-bottom: 10px;
+      border-bottom: 2px solid var(--secondary-color);
+      padding-bottom: 5px;
+    }
+
+    .note {
+      margin: 10px 0;
+      padding: 12px;
+      background-color: #f9f9f9;
+      border-left: 4px solid var(--secondary-color);
+      font-size: 10pt;
+    }
+
+    .note-title {
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 5px;
+    }
+
+    .note-content {
+      white-space: pre-wrap;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 40px;
+      padding-top: 15px;
+      border-top: 1px solid #ccc;
+      font-size: 9pt;
+      text-align: center;
+      color: #666;
+    }
+
+    .footer-content {
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        padding: 0;
+      }
+
+      .page {
+        padding: 15mm;
+      }
+
+      table {
+        page-break-inside: auto;
+      }
+
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      .notes-section {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    {{#if customizations.sections.showCompanyHeader}}
+    <div class="header">
+      <div class="company-info">
+        {{#if customizations.logo}}
+        <img src="{{customizations.logo}}" alt="Company Logo" class="company-logo">
+        {{/if}}
+        <div class="company-name">{{#if customizations.companyName}}{{customizations.companyName}}{{else}}Your Company Name{{/if}}</div>
+        {{#if customizations.tagline}}
+        <div class="company-tagline">{{customizations.tagline}}</div>
+        {{/if}}
+      </div>
+      <div class="document-title">
+        <h1>PURCHASE ORDER</h1>
+        <div class="po-number">PO# {{OrderNumber}}</div>
+      </div>
+    </div>
+    {{else}}
+    <div class="header">
+      <div class="company-info">
+        <div class="company-name">Purchase Order</div>
+      </div>
+      <div class="document-title">
+        <h1>{{OrderNumber}}</h1>
+      </div>
+    </div>
+    {{/if}}
+
+    <!-- Order and Supplier Info -->
+    <div class="info-section">
+      <!-- Order Details -->
+      {{#if customizations.sections.showJobDetails}}
+      <div class="info-box">
+        <h3>Order Details</h3>
+        <div class="info-row">
+          <span class="info-label">Order Number:</span>
+          <span class="info-value">{{OrderNumber}}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Order Date:</span>
+          <span class="info-value">{{formatDate OrderDate}}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Job Number:</span>
+          <span class="info-value">{{JobNo}}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Job Name:</span>
+          <span class="info-value">{{JobName}}</span>
+        </div>
+        {{#if Client}}
+        <div class="info-row">
+          <span class="info-label">Client:</span>
+          <span class="info-value">{{Client}}</span>
+        </div>
+        {{/if}}
+        <div class="info-row">
+          <span class="info-label">Cost Centre:</span>
+          <span class="info-value">{{CostCentre}} - {{CostCentreName}}</span>
+        </div>
+      </div>
+      {{/if}}
+
+      <!-- Supplier Details -->
+      {{#if customizations.sections.showSupplierAddress}}
+      <div class="info-box">
+        <div class="supplier-box">
+          <h3>Supplier</h3>
+          <div class="info-value"><strong>{{SupplierName}}</strong></div>
+          {{#if SupplierContact}}
+          <div class="info-row">
+            <span class="info-label">Attn:</span>
+            <span class="info-value">{{SupplierContact}}</span>
+          </div>
+          {{/if}}
+          {{#if SupplierAddress}}
+          <div class="info-row">
+            <span class="info-label">Address:</span>
+            <span class="info-value">{{SupplierAddress}}</span>
+          </div>
+          {{/if}}
+          {{#if SupplierPhone}}
+          <div class="info-row">
+            <span class="info-label">Phone:</span>
+            <span class="info-value">{{SupplierPhone}}</span>
+          </div>
+          {{/if}}
+          {{#if SupplierEmail}}
+          <div class="info-row">
+            <span class="info-label">Email:</span>
+            <span class="info-value">{{SupplierEmail}}</span>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+      {{/if}}
+    </div>
+
+    <!-- Line Items Table -->
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 15%;">Item Code</th>
+          {{#if showSupplierRef}}
+          <th style="width: 12%;">Supplier Ref</th>
+          {{/if}}
+          <th style="width: {{#if showSupplierRef}}33%{{else}}45%{{/if}};">Description</th>
+          <th class="align-right" style="width: 10%;">Quantity</th>
+          <th style="width: 8%;">Unit</th>
+          {{#if showLinePrices}}
+          <th class="align-right" style="width: 12%;">Unit Price</th>
+          <th class="align-right" style="width: 12%;">Total</th>
+          {{/if}}
+        </tr>
+      </thead>
+      <tbody>
+        {{#each items}}
+        <tr>
+          <td>{{ItemCode}}</td>
+          {{#if ../showSupplierRef}}
+          <td>{{SupplierReference}}</td>
+          {{/if}}
+          <td>{{Description}}</td>
+          <td class="align-right">{{formatNumber Quantity}}</td>
+          <td>{{Unit}}</td>
+          {{#if ../showLinePrices}}
+          <td class="align-right">{{currency UnitPrice}}</td>
+          <td class="align-right">{{currency LineTotal}}</td>
+          {{/if}}
+        </tr>
+        {{#if Workup}}
+        <tr class="workup-row">
+          <td colspan="{{#if ../showLinePrices}}7{{else}}5{{/if}}">
+            {{Workup}}
+          </td>
+        </tr>
+        {{/if}}
+        {{/each}}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    {{#if showPrices}}
+    <div class="totals-section">
+      <div class="total-row">
+        <span class="total-label">Subtotal:</span>
+        <span class="total-value">{{currency SubTotal}}</span>
+      </div>
+      {{#if GSTAmount}}
+      {{#ifEquals gstMode 'perLine'}}
+      <div class="total-row">
+        <span class="total-label">GST (10%):</span>
+        <span class="total-value">{{currency GSTAmount}}</span>
+      </div>
+      {{/ifEquals}}
+      {{#ifEquals gstMode 'total'}}
+      <div class="total-row">
+        <span class="total-label">GST (10%):</span>
+        <span class="total-value">{{currency GSTAmount}}</span>
+      </div>
+      {{/ifEquals}}
+      {{/if}}
+      <div class="total-row grand-total">
+        <span class="total-label">TOTAL:</span>
+        <span class="total-value">{{currency GrandTotal}}</span>
+      </div>
+    </div>
+    {{/if}}
+
+    <!-- Standard Notes -->
+    {{#if standardNotes.length}}
+    {{#if customizations.sections.showNotes}}
+    <div class="notes-section">
+      <h3>Order Notes</h3>
+      {{#each standardNotes}}
+      <div class="note">
+        {{#if NoteCode}}
+        <div class="note-title">{{NoteCode}}</div>
+        {{/if}}
+        <div class="note-content">{{NoteText}}</div>
+      </div>
+      {{/each}}
+    </div>
+    {{/if}}
+    {{/if}}
+
+    <!-- Global Notes -->
+    {{#if globalNotes.length}}
+    {{#if customizations.sections.showNotes}}
+    <div class="notes-section">
+      {{#unless standardNotes.length}}
+      <h3>Order Notes</h3>
+      {{/unless}}
+      {{#each globalNotes}}
+      <div class="note">
+        <div class="note-content">{{NoteText}}</div>
+      </div>
+      {{/each}}
+    </div>
+    {{/if}}
+    {{/if}}
+
+    <!-- Footer -->
+    {{#if customizations.sections.showFooter}}
+    <div class="footer">
+      {{#if customizations.content.footerText}}
+      <div class="footer-content">{{customizations.content.footerText}}</div>
+      {{/if}}
+      {{#if customizations.content.terms}}
+      <div class="footer-content"><strong>Terms:</strong> {{customizations.content.terms}}</div>
+      {{/if}}
+      <div>Purchase Order generated by DBx Connector Vue on {{formatDate currentDate}}</div>
+    </div>
+    {{else}}
+    <div class="footer">
+      <div>Purchase Order generated by DBx Connector Vue on {{formatDate currentDate}}</div>
+    </div>
+    {{/if}}
+  </div>
+</body>
+</html>

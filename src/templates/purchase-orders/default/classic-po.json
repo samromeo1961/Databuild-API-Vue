@@ -1,0 +1,72 @@
+{
+  "id": "classic-po",
+  "name": "Classic Purchase Order",
+  "description": "Traditional formal layout with company header and professional styling",
+  "category": "Standard",
+  "type": "PO",
+  "author": "DBx Connector",
+  "version": "1.0.0",
+  "created": "2025-01-14",
+  "templateFile": "classic-po.hbs",
+  "previewImage": null,
+  "customizable": {
+    "logo": true,
+    "colors": true,
+    "fonts": true,
+    "sections": {
+      "showCompanyHeader": true,
+      "showSupplierAddress": true,
+      "showJobDetails": true,
+      "showNotes": true,
+      "showFooter": true
+    },
+    "content": {
+      "companyName": true,
+      "tagline": true,
+      "footerText": true,
+      "terms": true
+    }
+  },
+  "defaultCustomizations": {
+    "logo": null,
+    "companyName": "Your Company Name",
+    "tagline": "",
+    "colors": {
+      "primary": "#003366",
+      "secondary": "#0066cc",
+      "text": "#333333",
+      "background": "#ffffff"
+    },
+    "fonts": {
+      "header": "Arial, sans-serif",
+      "body": "Helvetica, Arial, sans-serif"
+    },
+    "sections": {
+      "showCompanyHeader": true,
+      "showSupplierAddress": true,
+      "showJobDetails": true,
+      "showNotes": true,
+      "showFooter": true
+    },
+    "content": {
+      "footerText": "Thank you for your business",
+      "terms": "Payment due within 30 days",
+      "dateFormat": "DD/MM/YYYY"
+    }
+  },
+  "features": [
+    "Professional header with logo support",
+    "Dual-column layout for order and supplier details",
+    "Line items table with workup notes",
+    "Subtotal and GST calculations",
+    "Standard and global notes support",
+    "Customizable colors and fonts",
+    "Print-optimized styling"
+  ],
+  "suitableFor": [
+    "Standard purchase orders",
+    "Formal supplier communications",
+    "Professional documentation",
+    "General procurement"
+  ]
+}
