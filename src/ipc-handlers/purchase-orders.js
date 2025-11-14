@@ -28,7 +28,7 @@ async function getJobs(event) {
 
     const query = `
       SELECT
-        JobNo,
+        Job_No AS JobNo,
         JobName,
         Client,
         Address,
@@ -36,7 +36,7 @@ async function getJobs(event) {
         StartDate
       FROM [${jobDbName}].[dbo].[Jobs]
       WHERE Status != 'Archived'
-      ORDER BY JobNo DESC
+      ORDER BY Job_No DESC
     `;
 
     const result = await pool.request().query(query);
@@ -305,7 +305,7 @@ async function getOrderSummary(event, orderNumber) {
     const query = `
       SELECT
         '${orderNumber}' AS OrderNumber,
-        j.JobNo,
+        j.Job_No AS JobNo,
         j.JobName,
         j.Client,
         cc.Code AS CostCentre,
@@ -320,7 +320,7 @@ async function getOrderSummary(event, orderNumber) {
         SUM(b.Quantity * b.UnitPrice) * 0.10 AS GSTAmount,
         SUM(b.Quantity * b.UnitPrice) * 1.10 AS Total
       FROM [${jobDbName}].[dbo].[Bill] b
-      LEFT JOIN [${jobDbName}].[dbo].[Jobs] j ON b.JobNo = j.JobNo
+      LEFT JOIN [${jobDbName}].[dbo].[Jobs] j ON b.JobNo = j.Job_No
       LEFT JOIN [${sysDbName}].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       LEFT JOIN [${sysDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
@@ -329,7 +329,7 @@ async function getOrderSummary(event, orderNumber) {
         AND b.BLoad = @BLoad
         AND b.Quantity > 0
       GROUP BY
-        j.JobNo,
+        j.Job_No,
         j.JobName,
         j.Client,
         cc.Code,
@@ -415,19 +415,19 @@ async function getJobsWithOrderCounts(event) {
 
     const query = `
       SELECT
-        j.JobNo,
+        j.Job_No AS JobNo,
         j.JobName,
         j.Client,
         j.Status,
         COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) AS OrderCount,
         SUM(CASE WHEN o.OrderNumber IS NOT NULL THEN 1 ELSE 0 END) AS LoggedCount
       FROM [${jobDbName}].[dbo].[Jobs] j
-      LEFT JOIN [${jobDbName}].[dbo].[Bill] b ON j.JobNo = b.JobNo AND b.Quantity > 0
+      LEFT JOIN [${jobDbName}].[dbo].[Bill] b ON j.Job_No = b.JobNo AND b.Quantity > 0
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       WHERE j.Status != 'Archived'
-      GROUP BY j.JobNo, j.JobName, j.Client, j.Status
+      GROUP BY j.Job_No, j.JobName, j.Client, j.Status
       HAVING COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) > 0
-      ORDER BY j.JobNo DESC
+      ORDER BY j.Job_No DESC
     `;
 
     const result = await pool.request().query(query);
