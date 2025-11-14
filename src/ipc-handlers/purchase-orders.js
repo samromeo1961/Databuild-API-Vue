@@ -22,6 +22,8 @@ async function getJobs(event) {
     }
 
     const jobDbName = getJobDatabaseName();
+    const sysDbName = getSystemDatabaseName();
+
     if (!jobDbName) {
       return { success: false, message: 'Job Database not configured' };
     }
@@ -411,6 +413,7 @@ async function getJobsWithOrderCounts(event) {
     }
 
     const jobDbName = getJobDatabaseName();
+    const sysDbName = getSystemDatabaseName();
 
     if (!jobDbName) {
       return { success: false, message: 'Job Database not configured' };
