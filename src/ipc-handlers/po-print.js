@@ -23,18 +23,11 @@ async function printOrder(event, orderNumber, settings = {}) {
 
     // Get the rendered HTML
     const renderer = new templateRenderer();
-    const renderResult = await renderer.renderOrder(
+    const html = await renderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
     );
-
-    if (!renderResult.success) {
-      return {
-        success: false,
-        message: renderResult.message || 'Failed to render order'
-      };
-    }
 
     // Create a hidden window for printing
     const printWindow = new BrowserWindow({
@@ -47,7 +40,7 @@ async function printOrder(event, orderNumber, settings = {}) {
 
     // Load the HTML content
     await printWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(renderResult.html)}`
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
     // Wait for content to load
@@ -91,18 +84,11 @@ async function saveOrderAsPDF(event, orderNumber, settings = {}) {
 
     // Get the rendered HTML
     const renderer = new templateRenderer();
-    const renderResult = await renderer.renderOrder(
+    const html = await renderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
     );
-
-    if (!renderResult.success) {
-      return {
-        success: false,
-        message: renderResult.message || 'Failed to render order'
-      };
-    }
 
     // Parse order number to get job details for filename
     const orderParts = orderNumber.split('/');
@@ -139,7 +125,7 @@ async function saveOrderAsPDF(event, orderNumber, settings = {}) {
 
     // Load the HTML content
     await pdfWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(renderResult.html)}`
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
     // Wait for content to load
@@ -193,18 +179,11 @@ async function generateOrderPDF(event, orderNumber, settings = {}) {
 
     // Get the rendered HTML
     const renderer = new templateRenderer();
-    const renderResult = await renderer.renderOrder(
+    const html = await renderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
     );
-
-    if (!renderResult.success) {
-      return {
-        success: false,
-        message: renderResult.message || 'Failed to render order'
-      };
-    }
 
     // Create a hidden window for PDF generation
     const pdfWindow = new BrowserWindow({
@@ -217,7 +196,7 @@ async function generateOrderPDF(event, orderNumber, settings = {}) {
 
     // Load the HTML content
     await pdfWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(renderResult.html)}`
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     );
 
     // Wait for content to load
