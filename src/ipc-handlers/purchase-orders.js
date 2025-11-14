@@ -165,7 +165,7 @@ async function getOrdersForJob(event, jobNo) {
 
     // Build query with or without CCSuppliers join
     const query = hasCCSuppliers ? `
-      SELECT DISTINCT
+      SELECT
         b.JobNo,
         b.CostCentre,
         b.BLoad,
@@ -201,7 +201,7 @@ async function getOrdersForJob(event, jobNo) {
         ccs.SortOrder
       ORDER BY ISNULL(cc.SortOrder, 999999), b.CostCentre, b.BLoad
     ` : `
-      SELECT DISTINCT
+      SELECT
         b.JobNo,
         b.CostCentre,
         b.BLoad,
