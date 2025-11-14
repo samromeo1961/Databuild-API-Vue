@@ -1310,6 +1310,8 @@ ipcMain.handle('purchase-orders:get-order-line-items', purchaseOrdersHandlers.ge
 ipcMain.handle('purchase-orders:get-order-summary', purchaseOrdersHandlers.getOrderSummary);
 ipcMain.handle('purchase-orders:render-preview', purchaseOrdersHandlers.renderOrderPreview);
 ipcMain.handle('purchase-orders:get-cost-centres', purchaseOrdersHandlers.getCostCentres);
+ipcMain.handle('purchase-orders:get-preferred-suppliers', purchaseOrdersHandlers.getPreferredSuppliers);
+ipcMain.handle('purchase-orders:get-suppliers-for-cost-centre', purchaseOrdersHandlers.getSuppliersForCostCentre);
 
 // ============================================================
 // IPC Handlers for Purchase Order Printing/PDF

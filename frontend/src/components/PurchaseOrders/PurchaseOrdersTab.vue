@@ -269,7 +269,10 @@ export default {
           if (!params.value) {
             return '<span class="text-muted fst-italic">Not assigned</span>';
           }
-          return params.value;
+          // Show star icon for preferred suppliers
+          const isPreferred = params.data.IsPreferredSupplier === 1;
+          const star = isPreferred ? '<i class="bi bi-star-fill text-warning me-1" title="Preferred Supplier"></i>' : '';
+          return `${star}${params.value}`;
         }
       },
       {

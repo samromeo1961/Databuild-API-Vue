@@ -250,7 +250,9 @@ export function useElectronAPI() {
       getOrderLineItems: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderLineItems(orderNumber),
       getOrderSummary: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderSummary(orderNumber),
       renderPreview: (orderNumber, settings) => window.electronAPI?.purchaseOrders.renderPreview(orderNumber, settings),
-      getCostCentres: () => window.electronAPI?.purchaseOrders.getCostCentres()
+      getCostCentres: () => window.electronAPI?.purchaseOrders.getCostCentres(),
+      getPreferredSuppliers: (costCentre) => window.electronAPI?.purchaseOrders.getPreferredSuppliers(costCentre),
+      getSuppliersForCostCentre: (costCentre) => window.electronAPI?.purchaseOrders.getSuppliersForCostCentre(costCentre)
     },
 
     // Purchase Order Printing and PDF

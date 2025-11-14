@@ -246,7 +246,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getOrderLineItems: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-line-items', orderNumber),
     getOrderSummary: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-summary', orderNumber),
     renderPreview: (orderNumber, settings) => ipcRenderer.invoke('purchase-orders:render-preview', orderNumber, settings),
-    getCostCentres: () => ipcRenderer.invoke('purchase-orders:get-cost-centres')
+    getCostCentres: () => ipcRenderer.invoke('purchase-orders:get-cost-centres'),
+    getPreferredSuppliers: (costCentre) => ipcRenderer.invoke('purchase-orders:get-preferred-suppliers', costCentre),
+    getSuppliersForCostCentre: (costCentre) => ipcRenderer.invoke('purchase-orders:get-suppliers-for-cost-centre', costCentre)
   },
 
   // Purchase Order Printing and PDF

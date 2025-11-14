@@ -72,6 +72,8 @@ async function getOrdersForJob(event, jobNo) {
             OrderTotal: 15750.50,
             OrderDate: new Date().toISOString(),
             IsLogged: 0,
+            IsPreferredSupplier: 1,
+            SupplierSortOrder: 1,
             SortOrder: 100
           },
           {
@@ -83,6 +85,8 @@ async function getOrdersForJob(event, jobNo) {
             OrderTotal: 8950.00,
             OrderDate: new Date().toISOString(),
             IsLogged: 1,
+            IsPreferredSupplier: 1,
+            SupplierSortOrder: 1,
             SortOrder: 200
           },
           {
@@ -94,6 +98,8 @@ async function getOrdersForJob(event, jobNo) {
             OrderTotal: 22300.75,
             OrderDate: new Date().toISOString(),
             IsLogged: 0,
+            IsPreferredSupplier: 0,
+            SupplierSortOrder: null,
             SortOrder: 300
           },
           {
@@ -105,6 +111,8 @@ async function getOrdersForJob(event, jobNo) {
             OrderTotal: 4275.00,
             OrderDate: new Date().toISOString(),
             IsLogged: 1,
+            IsPreferredSupplier: 1,
+            SupplierSortOrder: 1,
             SortOrder: 400
           },
           {
@@ -116,6 +124,8 @@ async function getOrdersForJob(event, jobNo) {
             OrderTotal: 18500.00,
             OrderDate: new Date().toISOString(),
             IsLogged: 0,
+            IsPreferredSupplier: 1,
+            SupplierSortOrder: 1,
             SortOrder: 500
           }
         ],
@@ -148,12 +158,15 @@ async function getOrdersForJob(event, jobNo) {
         s.SupplierName,
         o.OrderDate,
         CASE WHEN o.OrderNumber IS NOT NULL THEN 1 ELSE 0 END AS IsLogged,
+        ISNULL(ccs.Preferred, 0) AS IsPreferredSupplier,
+        ccs.SortOrder AS SupplierSortOrder,
         SUM(b.Quantity * b.UnitPrice) AS OrderTotal,
         COUNT(*) AS ItemCount
       FROM [${jobDbName}].[dbo].[Bill] b
       LEFT JOIN [${sysDbName}].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       LEFT JOIN [${sysDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
+      LEFT JOIN [${sysDbName}].[dbo].[CCSuppliers] ccs ON b.CostCentre = ccs.CostCentre AND o.Supplier = ccs.SupplierCode
       WHERE b.JobNo = @JobNo
         AND b.Quantity > 0
       GROUP BY
@@ -165,7 +178,9 @@ async function getOrdersForJob(event, jobNo) {
         o.Supplier,
         s.SupplierName,
         o.OrderDate,
-        o.OrderNumber
+        o.OrderNumber,
+        ccs.Preferred,
+        ccs.SortOrder
       ORDER BY ISNULL(cc.SortOrder, 999999), b.CostCentre, b.BLoad
     `;
 
@@ -463,6 +478,94 @@ async function getJobsWithOrderCounts(event) {
   }
 }
 
+/**
+ * Get preferred suppliers for a cost centre
+ * Useful for supplier selection dropdowns
+ */
+async function getPreferredSuppliers(event, costCentre) {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      return { success: false, message: 'Database connection not available' };
+    }
+
+    const sysDbName = getSystemDatabaseName();
+
+    const query = `
+      SELECT
+        ccs.CostCentre,
+        ccs.SupplierCode,
+        ccs.Preferred,
+        ccs.SortOrder,
+        s.SupplierName,
+        s.AccountContact,
+        s.AccountPhone,
+        s.AccountEmail
+      FROM [${sysDbName}].[dbo].[CCSuppliers] ccs
+      INNER JOIN [${sysDbName}].[dbo].[Supplier] s ON ccs.SupplierCode = s.Supplier_Code
+      WHERE ccs.CostCentre = @CostCentre
+      ORDER BY ccs.Preferred DESC, ccs.SortOrder, s.SupplierName
+    `;
+
+    const result = await pool.request()
+      .input('CostCentre', costCentre)
+      .query(query);
+
+    return {
+      success: true,
+      suppliers: result.recordset,
+      preferredSupplier: result.recordset.find(s => s.Preferred === 1) || null
+    };
+  } catch (error) {
+    console.error('Error getting preferred suppliers:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Get all suppliers for a cost centre (including non-preferred)
+ */
+async function getSuppliersForCostCentre(event, costCentre) {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      return { success: false, message: 'Database connection not available' };
+    }
+
+    const sysDbName = getSystemDatabaseName();
+
+    const query = `
+      SELECT
+        s.Supplier_Code,
+        s.SupplierName,
+        s.AccountContact,
+        s.AccountPhone,
+        s.AccountEmail,
+        ISNULL(ccs.Preferred, 0) AS IsPreferred,
+        ccs.SortOrder
+      FROM [${sysDbName}].[dbo].[Supplier] s
+      LEFT JOIN [${sysDbName}].[dbo].[CCSuppliers] ccs
+        ON s.Supplier_Code = ccs.SupplierCode AND ccs.CostCentre = @CostCentre
+      WHERE s.Archived = 0
+      ORDER BY ISNULL(ccs.Preferred, 0) DESC,
+               ISNULL(ccs.SortOrder, 999999),
+               s.SupplierName
+    `;
+
+    const result = await pool.request()
+      .input('CostCentre', costCentre)
+      .query(query);
+
+    return {
+      success: true,
+      suppliers: result.recordset
+    };
+  } catch (error) {
+    console.error('Error getting suppliers for cost centre:', error);
+    return { success: false, message: error.message };
+  }
+}
+
 module.exports = {
   getJobs,
   getOrdersForJob,
@@ -470,5 +573,7 @@ module.exports = {
   renderOrderPreview,
   getOrderSummary,
   getCostCentres,
-  getJobsWithOrderCounts
+  getJobsWithOrderCounts,
+  getPreferredSuppliers,
+  getSuppliersForCostCentre
 };
