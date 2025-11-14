@@ -87,13 +87,6 @@
 
         <!-- Footer -->
         <div class="modal-footer">
-          <div class="me-auto text-muted small">
-            <span v-if="loading">Loading...</span>
-            <span v-else-if="error" class="text-danger">Error: {{ error }}</span>
-            <span v-else class="text-success">Ready</span>
-            <br>
-            <small>Debug: loading={{ loading }}, error='{{ error }}', disabled={{ loading || error }}</small>
-          </div>
           <button class="btn btn-secondary" @click="print" :disabled="loading || !!error">
             <i class="bi bi-printer me-2"></i>
             Print
@@ -180,16 +173,13 @@ export default {
     };
 
     const print = async () => {
-      console.log('Print button clicked!');
       loading.value = true;
       try {
-        console.log('Calling printOrder with:', props.orderNumber, getPlainSettings());
         const result = await api.poPrint.printOrder(
           props.orderNumber,
           getPlainSettings()
         );
 
-        console.log('Print result:', result);
         if (!result.success) {
           alert('Failed to print: ' + (result.message || 'Unknown error'));
         }
@@ -203,16 +193,13 @@ export default {
     };
 
     const savePDF = async () => {
-      console.log('Save PDF button clicked!');
       loading.value = true;
       try {
-        console.log('Calling saveAsPDF with:', props.orderNumber, getPlainSettings());
         const result = await api.poPrint.saveAsPDF(
           props.orderNumber,
           getPlainSettings()
         );
 
-        console.log('Save PDF result:', result);
         if (result.success && !result.cancelled) {
           alert('PDF saved successfully to: ' + result.filePath);
         } else if (!result.cancelled) {
