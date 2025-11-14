@@ -149,8 +149,22 @@ async function getOrdersForJob(event, jobNo) {
       return { success: false, message: 'Job Database not configured' };
     }
 
-    // Get all cost centres with quantities for this job
-    const query = `
+    // Check if CCSuppliers table exists (optional table for Preferred Suppliers feature)
+    let hasCCSuppliers = false;
+    try {
+      const checkTable = await pool.request().query(`
+        SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = 'dbo'
+        AND TABLE_NAME = 'CCSuppliers'
+        AND TABLE_CATALOG = '${sysDbName}'
+      `);
+      hasCCSuppliers = checkTable.recordset.length > 0;
+    } catch (err) {
+      console.log('CCSuppliers table check failed, assuming it does not exist');
+    }
+
+    // Build query with or without CCSuppliers join
+    const query = hasCCSuppliers ? `
       SELECT DISTINCT
         b.JobNo,
         b.CostCentre,
@@ -185,6 +199,39 @@ async function getOrdersForJob(event, jobNo) {
         o.OrderNumber,
         ccs.Preferred,
         ccs.SortOrder
+      ORDER BY ISNULL(cc.SortOrder, 999999), b.CostCentre, b.BLoad
+    ` : `
+      SELECT DISTINCT
+        b.JobNo,
+        b.CostCentre,
+        b.BLoad,
+        CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) AS OrderNumber,
+        cc.Name AS CostCentreName,
+        cc.SortOrder,
+        o.Supplier,
+        s.SupplierName,
+        o.OrderDate,
+        CASE WHEN o.OrderNumber IS NOT NULL THEN 1 ELSE 0 END AS IsLogged,
+        0 AS IsPreferredSupplier,
+        NULL AS SupplierSortOrder,
+        SUM(b.Quantity * b.UnitPrice) AS OrderTotal,
+        COUNT(*) AS ItemCount
+      FROM [${jobDbName}].[dbo].[Bill] b
+      LEFT JOIN [${sysDbName}].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
+      LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
+      LEFT JOIN [${sysDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
+      WHERE b.JobNo = @JobNo
+        AND b.Quantity > 0
+      GROUP BY
+        b.JobNo,
+        b.CostCentre,
+        b.BLoad,
+        cc.Name,
+        cc.SortOrder,
+        o.Supplier,
+        s.SupplierName,
+        o.OrderDate,
+        o.OrderNumber
       ORDER BY ISNULL(cc.SortOrder, 999999), b.CostCentre, b.BLoad
     `;
 
@@ -498,6 +545,24 @@ async function getPreferredSuppliers(event, costCentre) {
 
     const sysDbName = getSystemDatabaseName();
 
+    // Check if CCSuppliers table exists
+    const checkTable = await pool.request().query(`
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = 'dbo'
+      AND TABLE_NAME = 'CCSuppliers'
+      AND TABLE_CATALOG = '${sysDbName}'
+    `);
+
+    if (checkTable.recordset.length === 0) {
+      // CCSuppliers table doesn't exist - return empty result
+      return {
+        success: true,
+        suppliers: [],
+        preferredSupplier: null,
+        message: 'CCSuppliers table not found - Preferred Suppliers feature not available'
+      };
+    }
+
     const query = `
       SELECT
         ccs.CostCentre,
@@ -541,7 +606,17 @@ async function getSuppliersForCostCentre(event, costCentre) {
 
     const sysDbName = getSystemDatabaseName();
 
-    const query = `
+    // Check if CCSuppliers table exists
+    const checkTable = await pool.request().query(`
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = 'dbo'
+      AND TABLE_NAME = 'CCSuppliers'
+      AND TABLE_CATALOG = '${sysDbName}'
+    `);
+
+    const hasCCSuppliers = checkTable.recordset.length > 0;
+
+    const query = hasCCSuppliers ? `
       SELECT
         s.Supplier_Code,
         s.SupplierName,
@@ -557,6 +632,18 @@ async function getSuppliersForCostCentre(event, costCentre) {
       ORDER BY ISNULL(ccs.Preferred, 0) DESC,
                ISNULL(ccs.SortOrder, 999999),
                s.SupplierName
+    ` : `
+      SELECT
+        s.Supplier_Code,
+        s.SupplierName,
+        s.AccountContact,
+        s.AccountPhone,
+        s.AccountEmail,
+        0 AS IsPreferred,
+        NULL AS SortOrder
+      FROM [${sysDbName}].[dbo].[Supplier] s
+      WHERE s.Archived = 0
+      ORDER BY s.SupplierName
     `;
 
     const result = await pool.request()
