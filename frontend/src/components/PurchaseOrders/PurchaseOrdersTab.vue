@@ -81,7 +81,7 @@
     </div>
 
     <!-- Orders Grid -->
-    <div v-else class="flex-fill position-relative">
+    <div v-else class="flex-fill position-relative" ref="gridContainer" @click="handleGridClick">
       <!-- Loading Overlay -->
       <div v-if="loading" class="loading-overlay">
         <div class="spinner-border text-primary" role="status">
@@ -101,8 +101,7 @@
         :pagination="true"
         :paginationPageSize="20"
         :paginationPageSizeSelector="[10, 20, 50, 100]"
-        :rowSelection="'multiple'"
-        :suppressRowClickSelection="true"
+        :rowSelection="rowSelectionConfig"
         :enableCellTextSelection="true"
         :tooltipShowDelay="500"
         @grid-ready="onGridReady"
@@ -190,6 +189,7 @@ export default {
     const loading = ref(false);
     const gridApi = ref(null);
     const selectedOrders = ref([]);
+    const gridContainer = ref(null);
 
     // Modal states
     const showJobSelector = ref(false);
@@ -214,15 +214,20 @@ export default {
       floatingFilter: true
     };
 
+    const rowSelectionConfig = {
+      mode: 'multiRow',
+      checkboxes: true,
+      headerCheckbox: true,
+      enableClickSelection: false
+    };
+
     const columnDefs = [
       {
         headerName: '',
-        checkboxSelection: true,
-        headerCheckboxSelection: true,
         width: 50,
         pinned: 'left',
         lockPosition: true,
-        suppressMenu: true,
+        suppressHeaderMenuButton: true,
         filter: false
       },
       {
@@ -236,7 +241,7 @@ export default {
             return '<span class="badge bg-success">To Order</span>';
           }
         },
-        filter: 'agSetColumnFilter',
+        filter: 'agTextColumnFilter',
         filterParams: {
           valueFormatter: (params) => params.value === 1 ? 'Logged' : 'To Order'
         }
@@ -325,18 +330,17 @@ export default {
     // Methods
     const onGridReady = (params) => {
       gridApi.value = params.api;
+    };
 
-      // Add event listeners for action buttons
-      const gridElement = params.api.getGridElement();
-      gridElement.addEventListener('click', (e) => {
-        if (e.target.closest('.preview-btn')) {
-          const orderNumber = e.target.closest('.preview-btn').dataset.order;
-          previewOrder(orderNumber);
-        } else if (e.target.closest('.edit-btn')) {
-          const orderNumber = e.target.closest('.edit-btn').dataset.order;
-          editOrder(orderNumber);
-        }
-      });
+    const handleGridClick = (e) => {
+      // Handle action button clicks via event delegation
+      if (e.target.closest('.preview-btn')) {
+        const orderNumber = e.target.closest('.preview-btn').dataset.order;
+        previewOrder(orderNumber);
+      } else if (e.target.closest('.edit-btn')) {
+        const orderNumber = e.target.closest('.edit-btn').dataset.order;
+        editOrder(orderNumber);
+      }
     };
 
     const onSelectionChanged = () => {
@@ -411,6 +415,7 @@ export default {
       orders,
       loading,
       selectedOrders,
+      gridContainer,
       showJobSelector,
       showTemplateGallery,
       showOrderPreview,
@@ -418,8 +423,10 @@ export default {
       loggedCount,
       toOrderCount,
       defaultColDef,
+      rowSelectionConfig,
       columnDefs,
       onGridReady,
+      handleGridClick,
       onSelectionChanged,
       onJobSelected,
       refreshOrders,
