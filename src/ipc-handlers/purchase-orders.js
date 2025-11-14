@@ -316,18 +316,27 @@ async function getOrderLineItems(event, orderNumber) {
  */
 async function renderOrderPreview(event, orderNumber, settings) {
   try {
+    console.log('Rendering order preview for:', orderNumber);
+    console.log('Settings:', settings);
+
     const html = await templateRenderer.renderOrder(
       orderNumber,
       settings.template || 'classic-po',
       settings
     );
 
+    // Ensure we're returning a plain string, not any object references
+    const plainHtml = String(html);
+
+    console.log('Preview rendered successfully, HTML length:', plainHtml.length);
+
     return {
       success: true,
-      html
+      html: plainHtml
     };
   } catch (error) {
     console.error('Error rendering order preview:', error);
+    console.error('Error stack:', error.stack);
     return { success: false, message: error.message };
   }
 }
