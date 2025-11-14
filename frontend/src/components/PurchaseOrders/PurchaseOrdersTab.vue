@@ -321,7 +321,7 @@ export default {
             </div>
           `;
         },
-        suppressMenu: true,
+        suppressHeaderMenuButton: true,
         filter: false,
         sortable: false
       }

@@ -137,6 +137,14 @@ export default {
     });
 
     // Methods
+    // Helper: Convert reactive settings to plain object for IPC serialization
+    const getPlainSettings = () => ({
+      template: settings.value.template,
+      priceDisplay: settings.value.priceDisplay,
+      gstMode: settings.value.gstMode,
+      codeDisplay: settings.value.codeDisplay
+    });
+
     const loadPreview = async () => {
       loading.value = true;
       error.value = '';
@@ -144,7 +152,7 @@ export default {
       try {
         const result = await api.purchaseOrders.renderPreview(
           props.orderNumber,
-          settings.value
+          getPlainSettings()
         );
 
         if (result.success) {
@@ -169,7 +177,7 @@ export default {
       try {
         const result = await api.poPrint.printOrder(
           props.orderNumber,
-          settings.value
+          getPlainSettings()
         );
 
         if (!result.success) {
@@ -189,7 +197,7 @@ export default {
       try {
         const result = await api.poPrint.saveAsPDF(
           props.orderNumber,
-          settings.value
+          getPlainSettings()
         );
 
         if (result.success && !result.cancelled) {
