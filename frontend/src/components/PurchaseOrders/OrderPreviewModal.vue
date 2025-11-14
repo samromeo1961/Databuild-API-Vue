@@ -91,17 +91,18 @@
             <span v-if="loading">Loading...</span>
             <span v-else-if="error" class="text-danger">Error: {{ error }}</span>
             <span v-else class="text-success">Ready</span>
-            <!-- Debug: loading={{ loading }}, error={{ error ? 'YES' : 'NO' }} -->
+            <br>
+            <small>Debug: loading={{ loading }}, error='{{ error }}', disabled={{ loading || error }}</small>
           </div>
-          <button class="btn btn-secondary" @click="print" :disabled="loading || error">
+          <button class="btn btn-secondary" @click="print" :disabled="loading || !!error">
             <i class="bi bi-printer me-2"></i>
             Print
           </button>
-          <button class="btn btn-primary" @click="savePDF" :disabled="loading || error">
+          <button class="btn btn-primary" @click="savePDF" :disabled="loading || !!error">
             <i class="bi bi-file-pdf me-2"></i>
             Save as PDF
           </button>
-          <button class="btn btn-success" @click="showEmailDialog" :disabled="loading || error">
+          <button class="btn btn-success" @click="showEmailDialog" :disabled="loading || !!error">
             <i class="bi bi-envelope me-2"></i>
             Email
           </button>
