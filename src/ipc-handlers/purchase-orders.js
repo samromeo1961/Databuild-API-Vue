@@ -28,15 +28,17 @@ async function getJobs(event) {
 
     const query = `
       SELECT
-        Job_No AS JobNo,
-        JobName,
-        Client,
-        Address,
-        Status,
-        StartDate
-      FROM [${jobDbName}].[dbo].[Jobs]
-      WHERE Status != 'Archived'
-      ORDER BY Job_No DESC
+        j.Job_No AS JobNo,
+        j.JobName,
+        c.Name AS Client,
+        c.Address,
+        c.City,
+        j.Status,
+        j.StartDate
+      FROM [${jobDbName}].[dbo].[Jobs] j
+      LEFT JOIN [${sysDbName}].[dbo].[Contacts] c ON j.Job_No = c.Code
+      WHERE j.Status != 'Archived'
+      ORDER BY j.Job_No DESC
     `;
 
     const result = await pool.request().query(query);
@@ -307,7 +309,7 @@ async function getOrderSummary(event, orderNumber) {
         '${orderNumber}' AS OrderNumber,
         j.Job_No AS JobNo,
         j.JobName,
-        j.Client,
+        c.Name AS Client,
         cc.Code AS CostCentre,
         cc.Name AS CostCentreName,
         o.Supplier,
@@ -321,6 +323,7 @@ async function getOrderSummary(event, orderNumber) {
         SUM(b.Quantity * b.UnitPrice) * 1.10 AS Total
       FROM [${jobDbName}].[dbo].[Bill] b
       LEFT JOIN [${jobDbName}].[dbo].[Jobs] j ON b.JobNo = j.Job_No
+      LEFT JOIN [${sysDbName}].[dbo].[Contacts] c ON j.Job_No = c.Code
       LEFT JOIN [${sysDbName}].[dbo].[CostCentres] cc ON b.CostCentre = cc.Code AND cc.Tier = 1
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       LEFT JOIN [${sysDbName}].[dbo].[Supplier] s ON o.Supplier = s.Supplier_Code
@@ -331,7 +334,7 @@ async function getOrderSummary(event, orderNumber) {
       GROUP BY
         j.Job_No,
         j.JobName,
-        j.Client,
+        c.Name,
         cc.Code,
         cc.Name,
         o.Supplier,
@@ -417,15 +420,16 @@ async function getJobsWithOrderCounts(event) {
       SELECT
         j.Job_No AS JobNo,
         j.JobName,
-        j.Client,
+        c.Name AS Client,
         j.Status,
         COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) AS OrderCount,
         SUM(CASE WHEN o.OrderNumber IS NOT NULL THEN 1 ELSE 0 END) AS LoggedCount
       FROM [${jobDbName}].[dbo].[Jobs] j
+      LEFT JOIN [${sysDbName}].[dbo].[Contacts] c ON j.Job_No = c.Code
       LEFT JOIN [${jobDbName}].[dbo].[Bill] b ON j.Job_No = b.JobNo AND b.Quantity > 0
       LEFT JOIN [${jobDbName}].[dbo].[Orders] o ON CONCAT(b.JobNo, '/', b.CostCentre, '.', b.BLoad) = o.OrderNumber
       WHERE j.Status != 'Archived'
-      GROUP BY j.Job_No, j.JobName, j.Client, j.Status
+      GROUP BY j.Job_No, j.JobName, c.Name, j.Status
       HAVING COUNT(DISTINCT CONCAT(b.CostCentre, '.', b.BLoad)) > 0
       ORDER BY j.Job_No DESC
     `;

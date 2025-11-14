@@ -383,13 +383,14 @@ Supplier-specific pricing. Key fields:
 
 #### Jobs (Job Database)
 Job master records. Key fields:
-- `JobNo` (PK, nvarchar(10)) - Job number/code
+- `Job_No` (PK, nvarchar(10)) - Job number/code
 - `JobName` (nvarchar(120)) - Job description/name
 - `Status` (nvarchar(20)) - Job status (Active, Archived, etc.)
-- `Client` (nvarchar(96)) - Client name
-- `Address` (nvarchar(255)) - Job site address
+- `ScheduleProfile` (nvarchar) - Schedule profile reference
 - `StartDate` (datetime) - Project start date
 - `UDF1` through `UDF10` (nvarchar) - User-defined fields for notes
+
+**Important:** Client name, address, and contact details come from the **Contacts** table via `Jobs.Job_No = Contacts.Code` join.
 
 #### CCSuppliers (System Database)
 Preferred suppliers per cost centre (many-to-many). Key fields:
