@@ -87,6 +87,12 @@
 
         <!-- Footer -->
         <div class="modal-footer">
+          <div class="me-auto text-muted small">
+            <span v-if="loading">Loading...</span>
+            <span v-else-if="error" class="text-danger">Error: {{ error }}</span>
+            <span v-else class="text-success">Ready</span>
+            <!-- Debug: loading={{ loading }}, error={{ error ? 'YES' : 'NO' }} -->
+          </div>
           <button class="btn btn-secondary" @click="print" :disabled="loading || error">
             <i class="bi bi-printer me-2"></i>
             Print
