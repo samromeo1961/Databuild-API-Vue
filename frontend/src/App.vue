@@ -89,6 +89,16 @@
         </li>
         <li class="nav-item" role="presentation">
           <router-link
+            to="/purchase-orders"
+            class="nav-link"
+            active-class="active"
+            role="tab"
+          >
+            Purchase Orders
+          </router-link>
+        </li>
+        <li class="nav-item" role="presentation">
+          <router-link
             to="/favourites"
             class="nav-link"
             active-class="active"

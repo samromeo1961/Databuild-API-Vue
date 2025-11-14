@@ -33,6 +33,11 @@ const routes = [
     component: () => import('../components/Templates/TemplatesTab.vue')
   },
   {
+    path: '/purchase-orders',
+    name: 'Purchase Orders',
+    component: () => import('../components/PurchaseOrders/PurchaseOrdersTab.vue')
+  },
+  {
     path: '/favourites',
     name: 'Favourites',
     component: () => import('../components/Favourites/FavouritesTab.vue')
