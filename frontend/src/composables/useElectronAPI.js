@@ -218,6 +218,41 @@ export function useElectronAPI() {
       onFoundInPage: (callback) => window.electronAPI?.webview.onFoundInPage(callback)
     },
 
+    // Purchase Order Templates
+    poTemplates: {
+      getAll: () => window.electronAPI?.poTemplates.getAll(),
+      getBuiltIn: () => window.electronAPI?.poTemplates.getBuiltIn(),
+      getCustom: () => window.electronAPI?.poTemplates.getCustom(),
+      getById: (templateId) => window.electronAPI?.poTemplates.getById(templateId),
+      save: (templateData) => window.electronAPI?.poTemplates.save(templateData),
+      update: (templateId, updates) => window.electronAPI?.poTemplates.update(templateId, updates),
+      delete: (templateId) => window.electronAPI?.poTemplates.delete(templateId),
+      export: (templateId) => window.electronAPI?.poTemplates.export(templateId),
+      import: () => window.electronAPI?.poTemplates.import(),
+      getDefaultId: () => window.electronAPI?.poTemplates.getDefaultId(),
+      getDefault: () => window.electronAPI?.poTemplates.getDefault(),
+      setDefault: (templateId) => window.electronAPI?.poTemplates.setDefault(templateId),
+      loadHTML: (templateId) => window.electronAPI?.poTemplates.loadHTML(templateId),
+      createCustomized: (baseTemplateId, customizations, newName) =>
+        window.electronAPI?.poTemplates.createCustomized(baseTemplateId, customizations, newName),
+      getCategories: () => window.electronAPI?.poTemplates.getCategories(),
+      getByCategory: (category) => window.electronAPI?.poTemplates.getByCategory(category),
+      search: (query) => window.electronAPI?.poTemplates.search(query),
+      preview: (templateId, settings) => window.electronAPI?.poTemplates.preview(templateId, settings),
+      getSampleData: () => window.electronAPI?.poTemplates.getSampleData()
+    },
+
+    // Purchase Orders
+    purchaseOrders: {
+      getJobs: () => window.electronAPI?.purchaseOrders.getJobs(),
+      getJobsWithOrderCounts: () => window.electronAPI?.purchaseOrders.getJobsWithOrderCounts(),
+      getOrdersForJob: (jobNo) => window.electronAPI?.purchaseOrders.getOrdersForJob(jobNo),
+      getOrderLineItems: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderLineItems(orderNumber),
+      getOrderSummary: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderSummary(orderNumber),
+      renderPreview: (orderNumber, settings) => window.electronAPI?.purchaseOrders.renderPreview(orderNumber, settings),
+      getCostCentres: () => window.electronAPI?.purchaseOrders.getCostCentres()
+    },
+
     // Utility
     isElectron
   };

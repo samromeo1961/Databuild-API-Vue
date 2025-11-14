@@ -214,6 +214,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onFoundInPage: (callback) => ipcRenderer.on('webview:found-in-page', (event, result) => callback(result))
   },
 
+  // Purchase Order Templates (electron-store and template management)
+  poTemplates: {
+    getAll: () => ipcRenderer.invoke('po-templates:get-all'),
+    getBuiltIn: () => ipcRenderer.invoke('po-templates:get-builtin'),
+    getCustom: () => ipcRenderer.invoke('po-templates:get-custom'),
+    getById: (templateId) => ipcRenderer.invoke('po-templates:get-by-id', templateId),
+    save: (templateData) => ipcRenderer.invoke('po-templates:save', templateData),
+    update: (templateId, updates) => ipcRenderer.invoke('po-templates:update', templateId, updates),
+    delete: (templateId) => ipcRenderer.invoke('po-templates:delete', templateId),
+    export: (templateId) => ipcRenderer.invoke('po-templates:export', templateId),
+    import: () => ipcRenderer.invoke('po-templates:import'),
+    getDefaultId: () => ipcRenderer.invoke('po-templates:get-default-id'),
+    getDefault: () => ipcRenderer.invoke('po-templates:get-default'),
+    setDefault: (templateId) => ipcRenderer.invoke('po-templates:set-default', templateId),
+    loadHTML: (templateId) => ipcRenderer.invoke('po-templates:load-html', templateId),
+    createCustomized: (baseTemplateId, customizations, newName) =>
+      ipcRenderer.invoke('po-templates:create-customized', baseTemplateId, customizations, newName),
+    getCategories: () => ipcRenderer.invoke('po-templates:get-categories'),
+    getByCategory: (category) => ipcRenderer.invoke('po-templates:get-by-category', category),
+    search: (query) => ipcRenderer.invoke('po-templates:search', query),
+    preview: (templateId, settings) => ipcRenderer.invoke('po-templates:preview', templateId, settings),
+    getSampleData: () => ipcRenderer.invoke('po-templates:get-sample-data')
+  },
+
+  // Purchase Orders (database operations and rendering)
+  purchaseOrders: {
+    getJobs: () => ipcRenderer.invoke('purchase-orders:get-jobs'),
+    getJobsWithOrderCounts: () => ipcRenderer.invoke('purchase-orders:get-jobs-with-order-counts'),
+    getOrdersForJob: (jobNo) => ipcRenderer.invoke('purchase-orders:get-orders-for-job', jobNo),
+    getOrderLineItems: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-line-items', orderNumber),
+    getOrderSummary: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-summary', orderNumber),
+    renderPreview: (orderNumber, settings) => ipcRenderer.invoke('purchase-orders:render-preview', orderNumber, settings),
+    getCostCentres: () => ipcRenderer.invoke('purchase-orders:get-cost-centres')
+  },
+
   // Event listeners
   onShowHelp: (callback) => ipcRenderer.on('show-help', callback),
   onNavigateTo: (callback) => ipcRenderer.on('navigate-to', (event, path) => callback(path)),

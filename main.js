@@ -63,6 +63,8 @@ const filterStateHandlers = require('./src/ipc-handlers/filter-state');
 const columnNamesHandlers = require('./src/ipc-handlers/column-names');
 const jobsHandlers = require('./src/ipc-handlers/jobs');
 const notesStoreHandlers = require('./src/ipc-handlers/notes-store');
+const poTemplatesHandlers = require('./src/ipc-handlers/po-templates');
+const purchaseOrdersHandlers = require('./src/ipc-handlers/purchase-orders');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
 
@@ -1270,6 +1272,42 @@ ipcMain.handle('webview:execute-javascript', async (event, code) => {
     return { success: false, message: error.message };
   }
 });
+
+// ============================================================
+// IPC Handlers for Purchase Order Templates
+// ============================================================
+
+ipcMain.handle('po-templates:get-all', poTemplatesHandlers.getAllTemplates);
+ipcMain.handle('po-templates:get-builtin', poTemplatesHandlers.getBuiltInTemplates);
+ipcMain.handle('po-templates:get-custom', poTemplatesHandlers.getCustomTemplates);
+ipcMain.handle('po-templates:get-by-id', poTemplatesHandlers.getTemplateById);
+ipcMain.handle('po-templates:save', poTemplatesHandlers.saveCustomTemplate);
+ipcMain.handle('po-templates:update', poTemplatesHandlers.updateCustomTemplate);
+ipcMain.handle('po-templates:delete', poTemplatesHandlers.deleteTemplate);
+ipcMain.handle('po-templates:export', poTemplatesHandlers.exportTemplate);
+ipcMain.handle('po-templates:import', poTemplatesHandlers.importTemplate);
+ipcMain.handle('po-templates:get-default-id', poTemplatesHandlers.getDefaultTemplateId);
+ipcMain.handle('po-templates:get-default', poTemplatesHandlers.getDefaultTemplate);
+ipcMain.handle('po-templates:set-default', poTemplatesHandlers.setDefaultTemplate);
+ipcMain.handle('po-templates:load-html', poTemplatesHandlers.loadTemplateHTML);
+ipcMain.handle('po-templates:create-customized', poTemplatesHandlers.createCustomizedTemplate);
+ipcMain.handle('po-templates:get-categories', poTemplatesHandlers.getCategories);
+ipcMain.handle('po-templates:get-by-category', poTemplatesHandlers.getTemplatesByCategory);
+ipcMain.handle('po-templates:search', poTemplatesHandlers.searchTemplates);
+ipcMain.handle('po-templates:preview', poTemplatesHandlers.previewTemplate);
+ipcMain.handle('po-templates:get-sample-data', poTemplatesHandlers.getSampleData);
+
+// ============================================================
+// IPC Handlers for Purchase Orders
+// ============================================================
+
+ipcMain.handle('purchase-orders:get-jobs', purchaseOrdersHandlers.getJobs);
+ipcMain.handle('purchase-orders:get-jobs-with-order-counts', purchaseOrdersHandlers.getJobsWithOrderCounts);
+ipcMain.handle('purchase-orders:get-orders-for-job', purchaseOrdersHandlers.getOrdersForJob);
+ipcMain.handle('purchase-orders:get-order-line-items', purchaseOrdersHandlers.getOrderLineItems);
+ipcMain.handle('purchase-orders:get-order-summary', purchaseOrdersHandlers.getOrderSummary);
+ipcMain.handle('purchase-orders:render-preview', purchaseOrdersHandlers.renderOrderPreview);
+ipcMain.handle('purchase-orders:get-cost-centres', purchaseOrdersHandlers.getCostCentres);
 
 
 // ============================================================
