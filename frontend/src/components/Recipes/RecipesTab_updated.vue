@@ -136,6 +136,13 @@
               <i class="bi bi-file-earmark-excel"></i>
             </button>
             <button
+              class="btn btn-outline-warning"
+              @click="handleExportToJson"
+              title="Export to JSON (for import into other systems)"
+            >
+              <i class="bi bi-filetype-json"></i>
+            </button>
+            <button
               class="btn btn-outline-danger"
               @click="clearAllFilters"
               title="Clear All Column Filters"
@@ -1960,6 +1967,54 @@ const handleExportToCsv = async () => {
     console.error('Error exporting recipes:', err);
     error.value = 'Error exporting recipes';
     setTimeout(() => error.value = null, 3000);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Export to JSON (for import into other systems)
+// Excludes archived recipes and recipes with archived ingredients
+const handleExportToJson = async () => {
+  try {
+    loading.value = true;
+
+    // Build params with current filters
+    const params = {};
+
+    if (searchTerm.value) {
+      params.searchTerm = searchTerm.value;
+    }
+
+    if (selectedCostCentre.value) {
+      params.costCentres = [String(selectedCostCentre.value)];
+    }
+
+    console.log('Exporting recipes to JSON with params:', params);
+    const response = await api.recipes.exportJson(params);
+
+    if (response?.success && response.data) {
+      // Create and download JSON file
+      const jsonContent = JSON.stringify(response.data, null, 2);
+      const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `recipes-export-${new Date().toISOString().split('T')[0]}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      success.value = `Exported ${response.count} recipes with ${response.totalIngredients} ingredients to JSON`;
+      setTimeout(() => success.value = null, 5000);
+    } else {
+      error.value = response?.message || 'Failed to export recipes to JSON';
+      setTimeout(() => error.value = null, 5000);
+    }
+  } catch (err) {
+    console.error('Error exporting recipes to JSON:', err);
+    error.value = 'Error exporting recipes to JSON';
+    setTimeout(() => error.value = null, 5000);
   } finally {
     loading.value = false;
   }

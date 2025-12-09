@@ -511,6 +511,222 @@ async function getRecipeCostCentres(event, params) {
 }
 
 /**
+ * Export recipes to JSON format for import into other systems
+ * IPC Handler: 'recipes:export-json'
+ *
+ * Output format matches target system:
+ * {
+ *   code: string,
+ *   name: string,
+ *   description: string,
+ *   category: string,
+ *   unitOfMeasure: string,
+ *   items: [{ productSku, productName, quantityPer, wasteFactor, isLabor, unitCost }]
+ * }
+ *
+ * Excludes:
+ * - Archived recipes
+ * - Recipes with any archived ingredients
+ */
+async function exportRecipesJson(event, params = {}) {
+  try {
+    const {
+      searchTerm,
+      costCentres,
+      priceCodes  // Optional: export specific recipes by PriceCode array
+    } = params;
+
+    const pool = getPool();
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
+
+    const request = pool.request();
+
+    // Build WHERE conditions
+    let whereConditions = [
+      'PL.Recipe = 1',      // Only recipes
+      'PL.Archived = 0'     // Not archived
+    ];
+
+    // Exclude recipes that have ANY archived ingredients
+    whereConditions.push(`
+      NOT EXISTS (
+        SELECT 1 FROM Recipe R2
+        INNER JOIN PriceList PL2 ON R2.Sub_Item = PL2.PriceCode
+        WHERE R2.Main_Item = PL.PriceCode AND PL2.Archived = 1
+      )
+    `);
+
+    // Add search term filter
+    if (searchTerm) {
+      const searchWords = searchTerm.trim().split(/\s+/).filter(word => word.length > 0);
+      if (searchWords.length === 1) {
+        whereConditions.push(`(PL.PriceCode LIKE @searchTerm OR PL.Description LIKE @searchTerm)`);
+        request.input('searchTerm', `%${searchTerm}%`);
+      } else {
+        const descConditions = searchWords.map((word, index) => {
+          request.input(`searchWord${index}`, `%${word}%`);
+          return `PL.Description LIKE @searchWord${index}`;
+        });
+        whereConditions.push(`(${descConditions.join(' AND ')})`);
+      }
+    }
+
+    // Filter by cost centres
+    if (costCentres && Array.isArray(costCentres) && costCentres.length > 0) {
+      const ccPlaceholders = costCentres.map((cc, index) => {
+        request.input(`costCentre${index}`, cc);
+        return `@costCentre${index}`;
+      });
+      whereConditions.push(`PL.CostCentre IN (${ccPlaceholders.join(', ')})`);
+    }
+
+    // Filter by specific price codes
+    if (priceCodes && Array.isArray(priceCodes) && priceCodes.length > 0) {
+      const pcPlaceholders = priceCodes.map((pc, index) => {
+        request.input(`priceCode${index}`, pc);
+        return `@priceCode${index}`;
+      });
+      whereConditions.push(`PL.PriceCode IN (${pcPlaceholders.join(', ')})`);
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    // First, get all qualifying recipes
+    const recipesQuery = `
+      WITH LatestPrices AS (
+        SELECT
+          PriceCode,
+          Price,
+          Date,
+          ROW_NUMBER() OVER (PARTITION BY PriceCode ORDER BY Date DESC) AS rn
+        FROM Prices
+        WHERE PriceLevel = 1
+      )
+      SELECT
+        PL.PriceCode,
+        PL.Description,
+        CAST(PL.Specification AS NVARCHAR(MAX)) AS Specification,
+        CC.Name AS CostCentreName,
+        CC.SubGroup,
+        PC.Printout AS Unit,
+        LP.Price AS LatestPrice
+      FROM PriceList PL
+      LEFT JOIN CostCentres CC ON PL.CostCentre = CC.Code AND CC.Tier = 1
+      LEFT JOIN PerCodes PC ON PL.PerCode = PC.Code
+      LEFT JOIN LatestPrices LP ON PL.PriceCode = LP.PriceCode AND LP.rn = 1
+      ${whereClause}
+      ORDER BY CC.SortOrder, PL.CostCentre, PL.Description
+    `;
+
+    const recipesResult = await request.query(recipesQuery);
+    const recipes = recipesResult.recordset;
+
+    if (recipes.length === 0) {
+      return {
+        success: true,
+        count: 0,
+        data: [],
+        message: 'No recipes found matching criteria (excluding archived recipes and those with archived ingredients)'
+      };
+    }
+
+    // Get all sub-items for these recipes in a single query for efficiency
+    const priceCodeList = recipes.map(r => r.PriceCode);
+
+    // Build placeholders for IN clause
+    const subItemsRequest = pool.request();
+    const pcPlaceholders = priceCodeList.map((pc, index) => {
+      subItemsRequest.input(`mainItem${index}`, pc);
+      return `@mainItem${index}`;
+    });
+
+    const subItemsQuery = `
+      WITH LatestPrices AS (
+        SELECT
+          PriceCode,
+          Price,
+          Date,
+          ROW_NUMBER() OVER (PARTITION BY PriceCode ORDER BY Date DESC) AS rn
+        FROM Prices
+        WHERE PriceLevel = 1
+      )
+      SELECT
+        R.Main_Item,
+        R.Sub_Item AS ProductSku,
+        PL.Description AS ProductName,
+        R.Quantity AS QuantityPer,
+        CC.SubGroup,
+        LP.Price AS UnitCost
+      FROM Recipe R
+      INNER JOIN PriceList PL ON R.Sub_Item = PL.PriceCode
+      LEFT JOIN CostCentres CC ON COALESCE(R.Cost_Centre, PL.CostCentre) = CC.Code AND CC.Tier = 1
+      LEFT JOIN LatestPrices LP ON R.Sub_Item = LP.PriceCode AND LP.rn = 1
+      WHERE R.Main_Item IN (${pcPlaceholders.join(', ')})
+        AND PL.Archived = 0
+      ORDER BY R.Main_Item, R.Counter
+    `;
+
+    const subItemsResult = await subItemsRequest.query(subItemsQuery);
+
+    // Group sub-items by Main_Item
+    const subItemsByRecipe = {};
+    for (const item of subItemsResult.recordset) {
+      if (!subItemsByRecipe[item.Main_Item]) {
+        subItemsByRecipe[item.Main_Item] = [];
+      }
+      subItemsByRecipe[item.Main_Item].push({
+        productSku: item.ProductSku,
+        productName: item.ProductName,
+        quantityPer: item.QuantityPer || 0,
+        wasteFactor: 0,  // Databuild doesn't have waste factor, default to 0
+        isLabor: isLaborItem(item.SubGroup),  // Determine based on SubGroup
+        unitCost: item.UnitCost || 0
+      });
+    }
+
+    // Build the final JSON structure
+    const exportData = recipes.map(recipe => ({
+      code: recipe.PriceCode,
+      name: recipe.Description,
+      description: recipe.Specification || recipe.Description,
+      category: recipe.CostCentreName || recipe.SubGroup || 'Uncategorized',
+      unitOfMeasure: recipe.Unit || 'each',
+      items: subItemsByRecipe[recipe.PriceCode] || []
+    }));
+
+    console.log(`Exported ${exportData.length} recipes with ${subItemsResult.recordset.length} total ingredients`);
+
+    return {
+      success: true,
+      count: exportData.length,
+      totalIngredients: subItemsResult.recordset.length,
+      data: exportData
+    };
+
+  } catch (err) {
+    console.error('Error exporting recipes to JSON:', err);
+    return {
+      success: false,
+      error: 'Failed to export recipes',
+      message: err.message
+    };
+  }
+}
+
+/**
+ * Helper function to determine if an item is labor based on SubGroup
+ * Common labor-related SubGroups in construction: Labour, Labor, Install, etc.
+ */
+function isLaborItem(subGroup) {
+  if (!subGroup) return false;
+  const laborKeywords = ['labour', 'labor', 'install', 'fitting', 'fix', 'laying', 'erect'];
+  const lowerSubGroup = subGroup.toLowerCase();
+  return laborKeywords.some(keyword => lowerSubGroup.includes(keyword));
+}
+
+/**
  * Update a recipe's description
  * IPC Handler: 'recipes:update-recipe'
  */
@@ -595,5 +811,6 @@ module.exports = {
   getRecipeSubItems,
   getRecipe,
   getRecipeCostCentres,
-  updateRecipe
+  updateRecipe,
+  exportRecipesJson
 };

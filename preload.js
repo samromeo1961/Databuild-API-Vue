@@ -30,7 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSubItems: (priceCode) => ipcRenderer.invoke('recipes:get-subitems', priceCode),
     getRecipe: (priceCode) => ipcRenderer.invoke('recipes:get-recipe', priceCode),
     getCostCentres: (params) => ipcRenderer.invoke('recipes:get-cost-centres', params),
-    updateRecipe: (params) => ipcRenderer.invoke('recipes:update-recipe', params)
+    updateRecipe: (params) => ipcRenderer.invoke('recipes:update-recipe', params),
+    exportJson: (params) => ipcRenderer.invoke('recipes:export-json', params)
   },
 
   // Suppliers

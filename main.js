@@ -666,6 +666,7 @@ ipcMain.handle('recipes:get-subitems', recipesHandlers.getRecipeSubItems);
 ipcMain.handle('recipes:get-recipe', recipesHandlers.getRecipe);
 ipcMain.handle('recipes:get-cost-centres', recipesHandlers.getRecipeCostCentres);
 ipcMain.handle('recipes:update-recipe', recipesHandlers.updateRecipe);
+ipcMain.handle('recipes:export-json', recipesHandlers.exportRecipesJson);
 
 // ============================================================
 // IPC Handlers for Suppliers

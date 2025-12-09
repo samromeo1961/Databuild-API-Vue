@@ -36,7 +36,8 @@ export function useElectronAPI() {
       getSubItems: (priceCode) => window.electronAPI?.recipes.getSubItems(priceCode),
       getRecipe: (priceCode) => window.electronAPI?.recipes.getRecipe(priceCode),
       getCostCentres: (params) => window.electronAPI?.recipes.getCostCentres(params),
-      updateRecipe: (params) => window.electronAPI?.recipes.updateRecipe(params)
+      updateRecipe: (params) => window.electronAPI?.recipes.updateRecipe(params),
+      exportJson: (params) => window.electronAPI?.recipes.exportJson(params)
     },
 
     // Suppliers
