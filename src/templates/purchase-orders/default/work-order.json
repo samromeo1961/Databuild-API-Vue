@@ -1,0 +1,80 @@
+{
+  "id": "work-order",
+  "name": "Work Order (Blue)",
+  "description": "Professional work order template with blue header theme, two-column layout, and compliance alerts",
+  "category": "Work Orders",
+  "type": "WO",
+  "author": "DBx Connector",
+  "version": "1.0.0",
+  "created": "2025-01-16",
+  "templateFile": "work-order.hbs",
+  "previewImage": null,
+  "customizable": {
+    "logo": false,
+    "colors": true,
+    "fonts": true,
+    "sections": {
+      "showSupplierInfo": true,
+      "showJobAddress": true,
+      "showLineItems": true,
+      "showNotes": true,
+      "showInvoiceAlert": true,
+      "showDeliveryAlert": true,
+      "showSignature": true
+    },
+    "content": {
+      "companyName": true,
+      "companyABN": true,
+      "supervisor": true,
+      "estimator": true
+    }
+  },
+  "defaultCustomizations": {
+    "logo": null,
+    "companyName": "Your Company Name",
+    "companyABN": "12 345 678 901",
+    "colors": {
+      "primary": "#2c5aa0",
+      "secondary": "#0c5460",
+      "text": "#333333",
+      "background": "#ffffff"
+    },
+    "fonts": {
+      "header": "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      "body": "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    },
+    "sections": {
+      "showSupplierInfo": true,
+      "showJobAddress": true,
+      "showLineItems": true,
+      "showNotes": true,
+      "showInvoiceAlert": true,
+      "showDeliveryAlert": true,
+      "showSignature": true
+    },
+    "content": {
+      "supervisor": "Site Supervisor",
+      "estimator": "Project Manager",
+      "dateFormat": "DD/MM/YYYY"
+    }
+  },
+  "features": [
+    "Professional blue theme",
+    "Two-column supplier and job address layout",
+    "Date issued and required on site fields",
+    "Line items table with bordered design",
+    "Additional notes section",
+    "BCOA Standards compliance alerts",
+    "Invoice requirements alert box",
+    "Delivery instructions alert",
+    "Work completion certification signature",
+    "Print-optimized design"
+  ],
+  "suitableFor": [
+    "Construction work orders",
+    "Subcontractor orders",
+    "Site-specific orders",
+    "Compliance-focused documentation",
+    "Building industry standard orders"
+  ]
+}

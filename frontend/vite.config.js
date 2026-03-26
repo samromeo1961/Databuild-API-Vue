@@ -8,6 +8,11 @@ export default defineConfig({
   ],
   // Use relative base path for Electron (file:// protocol)
   base: './',
+  server: {
+    port: 5173,
+    strictPort: true,  // Fail if port is already in use
+    host: 'localhost'
+  },
   build: {
     // Manual chunk splitting for better caching and initial load performance
     rollupOptions: {

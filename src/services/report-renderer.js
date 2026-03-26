@@ -1,33 +1,106 @@
-const Handlebars = require('handlebars');
-const fs = require('fs').promises;
+const jsreport = require('jsreport-core')();
 const path = require('path');
 const { getPool, getJobDatabaseName, getSystemDatabaseName } = require('../database/connection');
 
 /**
- * TemplateRenderer - Handles rendering of Purchase Order templates
+ * ReportRenderer - JSReport-based rendering engine for all reports
  *
- * Responsibilities:
- * - Load and compile Handlebars templates
- * - Gather order data from database
- * - Apply price display settings
- * - Calculate totals and GST
- * - Replace UDF variables in notes
- * - Format dates and currency
- * - Render final HTML
+ * This service uses jsreport-core (free, LGPL) as the rendering engine.
+ * Templates are stored in electron-store and sent inline with render requests,
+ * so the 5-template limit does not apply.
+ *
+ * Key Features:
+ * - HTML to PDF via Chrome headless (jsreport-chrome-pdf)
+ * - Handlebars templating with custom helpers
+ * - Asset management for logos/images
+ * - No template storage in jsreport (unlimited free usage)
+ * - Compatible with existing template-renderer.js API
  */
-class TemplateRenderer {
+class ReportRenderer {
   constructor() {
-    this.handlebars = Handlebars.create();
-    this.registerHelpers();
-    this.templateCache = new Map();
+    this.jsreport = null;
+    this.initialized = false;
+    this.initializing = false;
   }
 
   /**
-   * Register custom Handlebars helpers
+   * Initialize jsreport instance with required extensions
+   * Only initializes once (singleton pattern)
+   */
+  async init() {
+    // Prevent multiple simultaneous initializations
+    if (this.initialized) return;
+    if (this.initializing) {
+      // Wait for ongoing initialization
+      while (this.initializing) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    this.initializing = true;
+    console.log('Initializing jsreport-core...');
+
+    try {
+      // Register extensions
+      jsreport.use(require('jsreport-handlebars')());
+      jsreport.use(require('jsreport-chrome-pdf')());
+      jsreport.use(require('jsreport-assets')());
+
+      // Configure jsreport
+      await jsreport.init({
+        // Disable template storage (we use electron-store instead)
+        store: {
+          provider: 'memory'
+        },
+        // Disable extensions we don't need
+        extensions: {
+          express: { enabled: false },  // No web server
+          studio: { enabled: false },    // No visual designer
+          authentication: { enabled: false },
+          authorization: { enabled: false },
+          licensing: { enabled: false }  // Free version
+        },
+        // Chrome PDF settings
+        chrome: {
+          timeout: 30000,  // 30 second timeout
+          launchOptions: {
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          }
+        },
+        // Handlebars settings
+        handlebars: {
+          allowedModules: '*'
+        },
+        // Logging
+        logger: {
+          silent: false
+        }
+      });
+
+      // Register custom Handlebars helpers
+      this.registerHelpers();
+
+      this.initialized = true;
+      this.initializing = false;
+      console.log('✓ jsreport-core initialized successfully');
+
+    } catch (error) {
+      this.initializing = false;
+      console.error('Error initializing jsreport:', error);
+      throw new Error(`Failed to initialize jsreport: ${error.message}`);
+    }
+  }
+
+  /**
+   * Register custom Handlebars helpers on the global Handlebars instance
+   * (used for HTML preview rendering)
    */
   registerHelpers() {
+    const Handlebars = require('handlebars');
+
     // Currency formatting helper
-    this.handlebars.registerHelper('currency', (value) => {
+    Handlebars.registerHelper('currency', (value) => {
       if (value === null || value === undefined) return '$0.00';
       const num = parseFloat(value);
       if (isNaN(num)) return '$0.00';
@@ -35,7 +108,7 @@ class TemplateRenderer {
     });
 
     // Alias for currency helper
-    this.handlebars.registerHelper('formatCurrency', (value) => {
+    Handlebars.registerHelper('formatCurrency', (value) => {
       if (value === null || value === undefined) return '$0.00';
       const num = parseFloat(value);
       if (isNaN(num)) return '$0.00';
@@ -43,7 +116,7 @@ class TemplateRenderer {
     });
 
     // Number formatting helper
-    this.handlebars.registerHelper('formatNumber', (value, decimals = 2) => {
+    Handlebars.registerHelper('formatNumber', (value, decimals = 2) => {
       if (value === null || value === undefined) return '0';
       const num = parseFloat(value);
       if (isNaN(num)) return '0';
@@ -51,12 +124,11 @@ class TemplateRenderer {
     });
 
     // Date formatting helper
-    this.handlebars.registerHelper('formatDate', (date, format) => {
+    Handlebars.registerHelper('formatDate', (date, format) => {
       if (!date) return '';
       const d = new Date(date);
       if (isNaN(d.getTime())) return '';
 
-      // Default Australian format: DD/MM/YYYY
       const day = String(d.getDate()).padStart(2, '0');
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const year = d.getFullYear();
@@ -66,60 +138,56 @@ class TemplateRenderer {
       } else if (format === 'YYYY-MM-DD') {
         return `${year}-${month}-${day}`;
       }
-
-      // Default: DD/MM/YYYY
       return `${day}/${month}/${year}`;
     });
 
     // Conditional equality helper
-    this.handlebars.registerHelper('ifEquals', function(arg1, arg2, options) {
+    Handlebars.registerHelper('ifEquals', function(arg1, arg2, options) {
       return (arg1 === arg2) ? options.fn(this) : options.inverse(this);
     });
 
     // Conditional NOT equality helper
-    this.handlebars.registerHelper('ifNotEquals', function(arg1, arg2, options) {
+    Handlebars.registerHelper('ifNotEquals', function(arg1, arg2, options) {
       return (arg1 !== arg2) ? options.fn(this) : options.inverse(this);
     });
 
     // GST calculation helper
-    this.handlebars.registerHelper('calculateGST', (amount, rate = 0.10) => {
+    Handlebars.registerHelper('calculateGST', (amount, rate = 0.10) => {
       if (!amount) return 0;
       return parseFloat(amount) * parseFloat(rate);
     });
 
     // Logical OR helper
-    this.handlebars.registerHelper('or', function() {
+    Handlebars.registerHelper('or', function() {
       return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
     });
 
     // Logical AND helper
-    this.handlebars.registerHelper('and', function() {
+    Handlebars.registerHelper('and', function() {
       return Array.prototype.slice.call(arguments, 0, -1).every(Boolean);
     });
 
-    // Addition helper (for incrementing indexes, etc.)
-    this.handlebars.registerHelper('add', function(a, b) {
+    // Math helpers
+    Handlebars.registerHelper('add', function(a, b) {
       return Number(a) + Number(b);
     });
 
-    // Subtraction helper
-    this.handlebars.registerHelper('subtract', function(a, b) {
+    Handlebars.registerHelper('subtract', function(a, b) {
       return Number(a) - Number(b);
     });
 
-    // Multiply helper
-    this.handlebars.registerHelper('multiply', function(a, b) {
+    Handlebars.registerHelper('multiply', function(a, b) {
       return Number(a) * Number(b);
     });
 
     // String helpers
-    this.handlebars.registerHelper('startsWith', function(str, prefix) {
+    Handlebars.registerHelper('startsWith', function(str, prefix) {
       if (!str || !prefix) return false;
       return String(str).startsWith(String(prefix));
     });
 
     // Line total calculation helper - handles percentage units
-    this.handlebars.registerHelper('calculateLineTotal', function(quantity, unitPrice, unit) {
+    Handlebars.registerHelper('calculateLineTotal', function(quantity, unitPrice, unit) {
       const qty = parseFloat(quantity) || 0;
       const price = parseFloat(unitPrice) || 0;
 
@@ -131,71 +199,242 @@ class TemplateRenderer {
       // Standard calculation
       return qty * price;
     });
+
+    console.log('✓ Custom Handlebars helpers registered');
   }
 
   /**
-   * Load template from file system
-   * @param {string} templatePath - Path to template file
-   * @returns {Promise<Function>} Compiled Handlebars template
+   * Get helpers as a JavaScript string to pass to jsreport
+   * This is needed because jsreport uses its own Handlebars instance
    */
-  async loadTemplate(templatePath) {
-    // Check cache first
-    if (this.templateCache.has(templatePath)) {
-      return this.templateCache.get(templatePath);
-    }
+  getHelpersString() {
+    return `
+function currency(value) {
+  if (value === null || value === undefined) return '$0.00';
+  const num = parseFloat(value);
+  if (isNaN(num)) return '$0.00';
+  return '$' + num.toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+}
+
+function formatCurrency(value) {
+  if (value === null || value === undefined) return '$0.00';
+  const num = parseFloat(value);
+  if (isNaN(num)) return '$0.00';
+  return '$' + num.toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+}
+
+function formatNumber(value, decimals) {
+  decimals = decimals || 2;
+  if (value === null || value === undefined) return '0';
+  const num = parseFloat(value);
+  if (isNaN(num)) return '0';
+  return num.toFixed(decimals).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+}
+
+function formatDate(date, format) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+
+  if (format === 'MM/DD/YYYY') {
+    return month + '/' + day + '/' + year;
+  } else if (format === 'YYYY-MM-DD') {
+    return year + '-' + month + '-' + day;
+  }
+  return day + '/' + month + '/' + year;
+}
+
+function ifEquals(arg1, arg2, options) {
+  return (arg1 === arg2) ? options.fn(this) : options.inverse(this);
+}
+
+function ifNotEquals(arg1, arg2, options) {
+  return (arg1 !== arg2) ? options.fn(this) : options.inverse(this);
+}
+
+function calculateGST(amount, rate) {
+  rate = rate || 0.10;
+  if (!amount) return 0;
+  return parseFloat(amount) * parseFloat(rate);
+}
+
+function or() {
+  return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
+}
+
+function and() {
+  return Array.prototype.slice.call(arguments, 0, -1).every(Boolean);
+}
+
+function add(a, b) {
+  return Number(a) + Number(b);
+}
+
+function subtract(a, b) {
+  return Number(a) - Number(b);
+}
+
+function multiply(a, b) {
+  return Number(a) * Number(b);
+}
+
+function startsWith(str, prefix) {
+  if (!str || !prefix) return false;
+  return String(str).startsWith(String(prefix));
+}
+
+function calculateLineTotal(quantity, unitPrice, unit) {
+  const qty = parseFloat(quantity) || 0;
+  const price = parseFloat(unitPrice) || 0;
+
+  // If unit is %, calculate as percentage of unit price
+  if (unit === '%') {
+    return price * (qty / 100);
+  }
+
+  // Standard calculation
+  return qty * price;
+}
+`;
+  }
+
+  /**
+   * Render a report to PDF
+   * @param {string} htmlContent - Full HTML template content
+   * @param {Object} data - Data to pass to template
+   * @param {Object} options - Rendering options
+   * @returns {Promise<Buffer>} PDF as Buffer
+   */
+  async renderToPDF(htmlContent, data, options = {}) {
+    await this.init();
 
     try {
-      const templateContent = await fs.readFile(templatePath, 'utf8');
-      const compiled = this.handlebars.compile(templateContent);
+      console.log('Rendering report to PDF...');
+      console.log('htmlContent type:', typeof htmlContent);
+      console.log('htmlContent is undefined?', htmlContent === undefined);
+      console.log('htmlContent is null?', htmlContent === null);
 
-      // Cache the compiled template
-      this.templateCache.set(templatePath, compiled);
+      if (!htmlContent) {
+        throw new Error('htmlContent is required but was: ' + htmlContent);
+      }
 
-      return compiled;
+      console.log('Data keys:', Object.keys(data));
+      console.log('Template length:', htmlContent.length);
+
+      const result = await jsreport.render({
+        template: {
+          content: htmlContent,
+          engine: 'handlebars',
+          recipe: 'chrome-pdf',
+          helpers: this.getHelpersString(),
+          chrome: {
+            format: options.format || 'A4',
+            landscape: options.landscape || false,
+            printBackground: true,
+            displayHeaderFooter: options.displayHeaderFooter || false,
+            marginTop: options.marginTop || '10mm',
+            marginBottom: options.marginBottom || '10mm',
+            marginLeft: options.marginLeft || '10mm',
+            marginRight: options.marginRight || '10mm',
+            ...options.chrome
+          }
+        },
+        data: data
+      });
+
+      console.log('✓ PDF rendered successfully, size:', result.content.length, 'bytes');
+      return result.content;
+
     } catch (error) {
-      console.error('Error loading template:', error);
-      throw new Error(`Failed to load template: ${error.message}`);
+      console.error('Error rendering to PDF:', error);
+      throw new Error(`Failed to render PDF: ${error.message}`);
     }
   }
 
   /**
-   * Main render function
-   * @param {string} orderNumber - Order number to render
-   * @param {string} templateName - Template identifier
-   * @param {Object} settings - Rendering settings
+   * Render a report to HTML (for preview)
+   * Uses Handlebars directly instead of jsreport for faster preview rendering
+   * @param {string} htmlContent - Full HTML template content
+   * @param {Object} data - Data to pass to template
    * @returns {Promise<string>} Rendered HTML
    */
-  async renderOrder(orderNumber, templateName, settings) {
-    try {
-      // 1. Load template
-      const templatePath = this.getTemplatePath(templateName);
-      const template = await this.loadTemplate(templatePath);
+  async renderToHTML(htmlContent, data) {
+    await this.init();
 
-      // 2. Gather complete order data from database (or use sample data for demo orders)
+    try {
+      console.log('Rendering report to HTML...');
+      console.log('Template content length:', htmlContent?.length);
+      console.log('Data object keys:', data ? Object.keys(data).join(', ') : 'NO DATA');
+
+      // Use Handlebars directly for HTML preview (faster than jsreport)
+      const Handlebars = require('handlebars');
+
+      // Compile the template
+      const template = Handlebars.compile(htmlContent);
+
+      // Render with data
+      const htmlString = template(data);
+
+      console.log('✓ HTML rendered with Handlebars, length:', htmlString.length);
+      console.log('First 100 chars:', htmlString.substring(0, 100));
+
+      return htmlString;
+
+    } catch (error) {
+      console.error('Error rendering to HTML:', error);
+      console.error('Error stack:', error.stack);
+      throw new Error(`Failed to render HTML: ${error.message}`);
+    }
+  }
+
+  /**
+   * Main render function - Compatible with existing template-renderer.js API
+   * @param {string} orderNumber - Order number to render
+   * @param {string} templateContent - HTML template content
+   * @param {Object} settings - Rendering settings
+   * @returns {Promise<Buffer>} Rendered PDF
+   */
+  async renderOrder(orderNumber, templateContent, settings = {}) {
+    try {
+      console.log('===== renderOrder called =====');
+      console.log('orderNumber:', orderNumber);
+      console.log('templateContent type:', typeof templateContent);
+      console.log('templateContent length:', templateContent?.length || 'N/A');
+      console.log('templateContent first 100 chars:', templateContent?.substring(0, 100) || 'NONE');
+      console.log('settings:', settings);
+
+      if (!templateContent) {
+        throw new Error('templateContent parameter is required but was: ' + templateContent);
+      }
+
+      // 1. Gather complete order data from database (or use sample data for demo orders)
       let orderData;
       if (orderNumber && orderNumber.startsWith('DEMO')) {
         console.log('Using sample data for demo order:', orderNumber);
         orderData = this.getSampleData();
-        // Update the order number to match the requested one
-        orderData.orderNumber = orderNumber;
+        orderData.OrderNumber = orderNumber;
         orderData.job.jobNo = orderNumber.split('/')[0];
       } else {
         orderData = await this.gatherOrderData(orderNumber);
       }
 
-      // 3. Apply price display settings
+      // 2. Apply price display settings
       const processedData = this.applyPriceSettings(orderData, settings);
 
-      // 4. Calculate totals
+      // 3. Calculate totals
       const withTotals = this.calculateTotals(processedData, settings);
 
-      // 5. Replace UDF variables in notes
+      // 4. Replace UDF variables in notes
       const finalData = this.replaceUDFVariables(withTotals);
 
-      // 6. Add current date for footer
+      // 5. Add current date
       finalData.currentDate = new Date();
 
-      // 7. Merge with customizations if provided (with defaults)
+      // 6. Merge with customizations
       finalData.customizations = {
         sections: {
           showCompanyHeader: true,
@@ -218,27 +457,20 @@ class TemplateRenderer {
         };
       }
 
-      // 8. Add display flags
+      // 7. Add display flags
       finalData.showPrices = settings.priceDisplay !== 'none';
       finalData.showLinePrices = settings.priceDisplay === 'all';
       finalData.showSupplierRef = settings.codeDisplay === 'supplier' || settings.codeDisplay === 'both';
       finalData.gstMode = settings.gstMode || 'total';
 
-      // DEBUG: Log what we're passing to template
-      console.log('=== TEMPLATE DATA DEBUG ===');
-      console.log('Order Number:', finalData.OrderNumber);
-      console.log('Customizations:', JSON.stringify(finalData.customizations, null, 2));
-      console.log('DelDate:', finalData.DelDate);
-      console.log('SiteStreet:', finalData.SiteStreet);
-      console.log('Supervisor:', finalData.Supervisor);
-      console.log('AccountContact:', finalData.AccountContact);
-      console.log('SpecialInstructions:', finalData.SpecialInstructions);
-      console.log('=========================');
+      // 8. Render to PDF using jsreport
+      const pdf = await this.renderToPDF(templateContent, finalData, {
+        format: settings.format || 'A4',
+        landscape: settings.landscape || false
+      });
 
-      // 9. Render HTML
-      const html = template(finalData);
+      return pdf;
 
-      return html;
     } catch (error) {
       console.error('Error rendering order:', error);
       throw new Error(`Failed to render order: ${error.message}`);
@@ -246,26 +478,8 @@ class TemplateRenderer {
   }
 
   /**
-   * Get template file path
-   * @param {string} templateName - Template identifier
-   * @returns {string} Full path to template file
-   */
-  getTemplatePath(templateName) {
-    // Built-in templates
-    if (templateName.startsWith('custom-')) {
-      // Custom templates are handled by TemplateManager
-      throw new Error('Custom templates should be loaded via TemplateManager');
-    }
-
-    // Default templates path
-    const templatesDir = path.join(__dirname, '../templates/purchase-orders/default');
-    return path.join(templatesDir, `${templateName}.hbs`);
-  }
-
-  /**
    * Gather all order data from database
-   * @param {string} orderNumber - Order number (format: JobNo/CostCentre.BLoad)
-   * @returns {Promise<Object>} Complete order data
+   * (Copied from original template-renderer.js)
    */
   async gatherOrderData(orderNumber) {
     const pool = getPool();
@@ -434,14 +648,6 @@ class TemplateRenderer {
         .input('Supplier', orderHeader.Supplier)
         .query(itemsQuery);
 
-      // Query standard notes (if any attached to this order)
-      // For now, we'll return empty array - this will be implemented when notes system is built
-      const standardNotes = [];
-
-      // Query global notes
-      // For now, we'll return empty array - this will be implemented when notes system is built
-      const globalNotes = [];
-
       // Build complete order data object
       const orderData = {
         OrderNumber: orderHeader.OrderNumber,
@@ -471,14 +677,13 @@ class TemplateRenderer {
         AccountCity: orderHeader.AccountCity,
         AccountState: orderHeader.AccountState,
         AccountPostcode: orderHeader.AccountPostcode,
-        // Legacy field (for backwards compatibility)
         SupplierContact: orderHeader.AccountContact,
         SupplierPhone: orderHeader.AccountPhone,
         SupplierEmail: orderHeader.AccountEmail,
         SupplierAddress: supplierAddress,
         items: itemsResult.recordset,
-        standardNotes: standardNotes,
-        globalNotes: globalNotes,
+        standardNotes: [],
+        globalNotes: [],
         job: {
           UDF1: orderHeader.UDF1,
           UDF2: orderHeader.UDF2,
@@ -503,16 +708,12 @@ class TemplateRenderer {
 
   /**
    * Apply price display settings
-   * @param {Object} data - Order data
-   * @param {Object} settings - Display settings
-   * @returns {Object} Modified order data
    */
   applyPriceSettings(data, settings) {
     const modified = { ...data };
 
     switch (settings.priceDisplay) {
       case 'none':
-        // Hide all prices
         modified.items = modified.items.map(item => ({
           ...item,
           UnitPrice: null,
@@ -521,14 +722,9 @@ class TemplateRenderer {
         break;
 
       case 'totalOnly':
-        // Show totals but not line item prices
-        // Prices are still calculated but won't be displayed in template
         break;
 
       case 'supplierOnly':
-        // Show supplier prices (already using ISNULL(sp.Price, b.UnitPrice) from query)
-        // Items already have correct pricing - supplier price with catalog fallback
-        // Mark items with supplier prices for visual indication if needed
         modified.items = modified.items.map(item => ({
           ...item,
           hasSupplierPrice: item.SupplierPrice !== null,
@@ -538,7 +734,6 @@ class TemplateRenderer {
 
       case 'all':
       default:
-        // Show all prices (no modification needed)
         break;
     }
 
@@ -547,14 +742,10 @@ class TemplateRenderer {
 
   /**
    * Calculate totals with GST
-   * @param {Object} data - Order data
-   * @param {Object} settings - Calculation settings
-   * @returns {Object} Data with calculated totals
    */
   calculateTotals(data, settings) {
     const modified = { ...data };
 
-    // Calculate subtotal
     const subTotal = modified.items.reduce((sum, item) => {
       const qty = parseFloat(item.Quantity) || 0;
       const price = parseFloat(item.UnitPrice) || 0;
@@ -570,7 +761,6 @@ class TemplateRenderer {
 
     modified.SubTotal = subTotal;
 
-    // Calculate GST based on mode
     switch (settings.gstMode) {
       case 'none':
         modified.GSTAmount = 0;
@@ -579,8 +769,7 @@ class TemplateRenderer {
 
       case 'perLine':
       case 'total':
-        // Both modes calculate same total, display differs in template
-        modified.GSTAmount = subTotal * 0.10; // 10% GST
+        modified.GSTAmount = subTotal * 0.10;
         modified.GrandTotal = subTotal + modified.GSTAmount;
         break;
 
@@ -593,14 +782,11 @@ class TemplateRenderer {
   }
 
   /**
-   * Replace UDF variables in note text with actual values
-   * @param {Object} data - Order data
-   * @returns {Object} Data with UDF variables replaced
+   * Replace UDF variables in notes
    */
   replaceUDFVariables(data) {
     const modified = { ...data };
 
-    // Build UDF replacement map
     const udfMap = {
       '[job udf1]': data.job.UDF1 || '',
       '[job udf2]': data.job.UDF2 || '',
@@ -614,31 +800,23 @@ class TemplateRenderer {
       '[job udf10]': data.job.UDF10 || ''
     };
 
-    // Replace in standard notes
     if (modified.standardNotes && modified.standardNotes.length > 0) {
       modified.standardNotes = modified.standardNotes.map(note => {
         let noteText = note.NoteText;
         Object.keys(udfMap).forEach(key => {
           noteText = noteText.replace(new RegExp(key, 'gi'), udfMap[key]);
         });
-        return {
-          ...note,
-          NoteText: noteText
-        };
+        return { ...note, NoteText: noteText };
       });
     }
 
-    // Replace in global notes
     if (modified.globalNotes && modified.globalNotes.length > 0) {
       modified.globalNotes = modified.globalNotes.map(note => {
         let noteText = note.NoteText;
         Object.keys(udfMap).forEach(key => {
           noteText = noteText.replace(new RegExp(key, 'gi'), udfMap[key]);
         });
-        return {
-          ...note,
-          NoteText: noteText
-        };
+        return { ...note, NoteText: noteText };
       });
     }
 
@@ -646,21 +824,13 @@ class TemplateRenderer {
   }
 
   /**
-   * Clear template cache (useful for development/testing)
-   */
-  clearCache() {
-    this.templateCache.clear();
-  }
-
-  /**
    * Get sample order data for template previews
-   * @returns {Object} Sample data matching real order structure
    */
   getSampleData() {
     return {
       OrderNumber: '001/CONC.1',
       OrderDate: new Date(),
-      DelDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      DelDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       SpecialInstructions: 'Please deliver to back entrance after 2pm. Call supervisor on arrival.',
       JobNo: '001',
       JobName: 'Sample Construction Project',
@@ -722,17 +892,8 @@ class TemplateRenderer {
           Workup: 'Cut to length as per drawing'
         }
       ],
-      standardNotes: [
-        {
-          NoteCode: 'DELIVERY',
-          NoteText: 'All materials to be delivered to site address: [job udf1]'
-        }
-      ],
-      globalNotes: [
-        {
-          NoteText: 'Site hours: Monday to Friday 7:00 AM - 4:00 PM. No weekend deliveries without prior approval.'
-        }
-      ],
+      standardNotes: [],
+      globalNotes: [],
       job: {
         UDF1: '123 Construction St, Building City NSW 2000',
         UDF2: 'Site Manager: Jane Doe',
@@ -751,7 +912,20 @@ class TemplateRenderer {
       currentDate: new Date()
     };
   }
+
+  /**
+   * Clear initialization state (useful for testing)
+   */
+  async shutdown() {
+    if (this.initialized && this.jsreport) {
+      console.log('Shutting down jsreport...');
+      // jsreport-core doesn't have a close method, just reset state
+      this.initialized = false;
+      this.jsreport = null;
+      console.log('✓ jsreport shutdown complete');
+    }
+  }
 }
 
 // Export singleton instance
-module.exports = new TemplateRenderer();
+module.exports = new ReportRenderer();

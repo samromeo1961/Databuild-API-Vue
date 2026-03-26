@@ -55,7 +55,18 @@ export function useElectronAPI() {
       getPriceLevels: (params) => window.electronAPI?.preferences.getPriceLevels(params),
       getSupplierGroups: (params) => window.electronAPI?.preferences.getSupplierGroups(params),
       testConnection: (params) => window.electronAPI?.preferences.testConnection(params),
-      switchDatabase: (params) => window.electronAPI?.preferences.switchDatabase(params)
+      switchDatabase: (params) => window.electronAPI?.preferences.switchDatabase(params),
+      // Convenience methods for getting/setting individual preference keys
+      get: async (key) => {
+        const result = await window.electronAPI?.preferencesStore.get();
+        if (result && result.success) {
+          return { success: true, value: result.preferences?.[key] };
+        }
+        return { success: false, value: null };
+      },
+      set: async (key, value) => {
+        return await window.electronAPI?.preferencesStore.update(key, value);
+      }
     },
 
     // Cost Centres
@@ -112,6 +123,30 @@ export function useElectronAPI() {
       getList: () => window.electronAPI?.jobs.getList(),
       getOrdersColumns: () => window.electronAPI?.jobs.getOrdersColumns(),
       getDatabaseTables: () => window.electronAPI?.jobs.getDatabaseTables()
+    },
+
+    // Bill of Quantities (BOQ)
+    boq: {
+      getJobBill: (jobNo, costCentre, bLoad) => window.electronAPI?.boq.getJobBill(jobNo, costCentre, bLoad),
+      addItem: (billItem) => window.electronAPI?.boq.addItem(billItem),
+      updateItem: (billItem) => window.electronAPI?.boq.updateItem(billItem),
+      deleteItem: (jobNo, costCentre, bLoad, lineNumber) => window.electronAPI?.boq.deleteItem(jobNo, costCentre, bLoad, lineNumber),
+      getCostCentresWithBudgets: (jobNo) => window.electronAPI?.boq.getCostCentresWithBudgets(jobNo),
+      repriceBill: (jobNo, priceLevel, billDate) => window.electronAPI?.boq.repriceBill(jobNo, priceLevel, billDate),
+      explodeRecipe: (jobNo, costCentre, bLoad, priceCode, quantity, options) => window.electronAPI?.boq.explodeRecipe(jobNo, costCentre, bLoad, priceCode, quantity, options),
+      getLoads: (jobNo, costCentre) => window.electronAPI?.boq.getLoads(jobNo, costCentre),
+      createLoad: (jobNo, costCentre) => window.electronAPI?.boq.createLoad(jobNo, costCentre),
+      generateReport: (reportType, jobNo, costCentre) => window.electronAPI?.boq.generateReport(reportType, jobNo, costCentre)
+    },
+
+    // BOQ Options Store (electron-store persistence)
+    boqOptions: {
+      get: () => window.electronAPI?.boqOptions.get(),
+      save: (options) => window.electronAPI?.boqOptions.save(options),
+      update: (key, value) => window.electronAPI?.boqOptions.update(key, value),
+      reset: () => window.electronAPI?.boqOptions.reset(),
+      getDefaults: () => window.electronAPI?.boqOptions.getDefaults(),
+      saveLastUsed: (lastUsed) => window.electronAPI?.boqOptions.saveLastUsed(lastUsed)
     },
 
     // Templates Store (electron-store persistence)
@@ -239,7 +274,8 @@ export function useElectronAPI() {
       getByCategory: (category) => window.electronAPI?.poTemplates.getByCategory(category),
       search: (query) => window.electronAPI?.poTemplates.search(query),
       preview: (templateId, settings) => window.electronAPI?.poTemplates.preview(templateId, settings),
-      getSampleData: () => window.electronAPI?.poTemplates.getSampleData()
+      getSampleData: () => window.electronAPI?.poTemplates.getSampleData(),
+      previewCustomHTML: (html) => window.electronAPI?.poTemplates.previewCustomHTML(html)
     },
 
     // Purchase Orders
@@ -250,9 +286,20 @@ export function useElectronAPI() {
       getOrderLineItems: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderLineItems(orderNumber),
       getOrderSummary: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderSummary(orderNumber),
       renderPreview: (orderNumber, settings) => window.electronAPI?.purchaseOrders.renderPreview(orderNumber, settings),
+      renderPDF: (orderNumber, settings) => window.electronAPI?.purchaseOrders.renderPDF(orderNumber, settings),
       getCostCentres: () => window.electronAPI?.purchaseOrders.getCostCentres(),
       getPreferredSuppliers: (costCentre) => window.electronAPI?.purchaseOrders.getPreferredSuppliers(costCentre),
-      getSuppliersForCostCentre: (costCentre) => window.electronAPI?.purchaseOrders.getSuppliersForCostCentre(costCentre)
+      getSuppliersForCostCentre: (costCentre) => window.electronAPI?.purchaseOrders.getSuppliersForCostCentre(costCentre),
+      updateOrder: (orderNumber, updates) => window.electronAPI?.purchaseOrders.updateOrder(orderNumber, updates),
+      logOrder: (orderNumber, supplier, delDate, note) => window.electronAPI?.purchaseOrders.logOrder(orderNumber, supplier, delDate, note),
+      getOrderDetails: (orderNumber) => window.electronAPI?.purchaseOrders.getOrderDetails(orderNumber),
+      batchRenderPDF: (orderNumbers, settings) => window.electronAPI?.purchaseOrders.batchRenderPDF(orderNumbers, settings),
+      batchPrint: (orderNumbers, settings) => window.electronAPI?.purchaseOrders.batchPrint(orderNumbers, settings),
+      batchEmail: (orderNumbers, settings) => window.electronAPI?.purchaseOrders.batchEmail(orderNumbers, settings),
+      batchSavePDF: (orderNumbers, settings) => window.electronAPI?.purchaseOrders.batchSavePDF(orderNumbers, settings),
+      getAllSuppliers: () => window.electronAPI?.purchaseOrders.getAllSuppliers(),
+      addNominatedSupplier: (costCentre, supplierCode) => window.electronAPI?.purchaseOrders.addNominatedSupplier(costCentre, supplierCode),
+      removeNominatedSupplier: (costCentre, supplierCode) => window.electronAPI?.purchaseOrders.removeNominatedSupplier(costCentre, supplierCode)
     },
 
     // Purchase Order Printing and PDF
@@ -261,6 +308,42 @@ export function useElectronAPI() {
       saveAsPDF: (orderNumber, settings) => window.electronAPI?.poPrint.saveAsPDF(orderNumber, settings),
       generatePDF: (orderNumber, settings) => window.electronAPI?.poPrint.generatePDF(orderNumber, settings),
       getPDFSettings: () => window.electronAPI?.poPrint.getPDFSettings()
+    },
+
+    // Assets Library
+    assets: {
+      upload: (assetData) => window.electronAPI?.assets.upload(assetData),
+      getAll: (filters) => window.electronAPI?.assets.getAll(filters),
+      get: (id) => window.electronAPI?.assets.get(id),
+      getByName: (name) => window.electronAPI?.assets.getByName(name),
+      delete: (id) => window.electronAPI?.assets.delete(id),
+      update: (id, updates) => window.electronAPI?.assets.update(id, updates),
+      getStats: () => window.electronAPI?.assets.getStats(),
+      clearAll: () => window.electronAPI?.assets.clearAll()
+    },
+
+    // Template Partials
+    partials: {
+      save: (partialData) => window.electronAPI?.partials.save(partialData),
+      getAll: (filters) => window.electronAPI?.partials.getAll(filters),
+      get: (id) => window.electronAPI?.partials.get(id),
+      getByName: (name) => window.electronAPI?.partials.getByName(name),
+      delete: (id) => window.electronAPI?.partials.delete(id),
+      update: (id, updates) => window.electronAPI?.partials.update(id, updates),
+      getStats: () => window.electronAPI?.partials.getStats(),
+      clearAll: () => window.electronAPI?.partials.clearAll(),
+      getHandlebars: () => window.electronAPI?.partials.getHandlebars(),
+      import: (partialsData) => window.electronAPI?.partials.import(partialsData),
+      export: () => window.electronAPI?.partials.export()
+    },
+
+    // Seed Example Data
+    seed: {
+      all: () => window.electronAPI?.seed.all(),
+      assets: () => window.electronAPI?.seed.assets(),
+      partials: () => window.electronAPI?.seed.partials(),
+      clearAll: () => window.electronAPI?.seed.clearAll(),
+      clearPartials: () => window.electronAPI?.seed.clearPartials()
     },
 
     // Utility

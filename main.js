@@ -67,8 +67,13 @@ const poTemplatesHandlers = require('./src/ipc-handlers/po-templates');
 const purchaseOrdersHandlers = require('./src/ipc-handlers/purchase-orders');
 const poPrintHandlers = require('./src/ipc-handlers/po-print');
 const poDiagnosticsHandlers = require('./src/ipc-handlers/po-diagnostics');
+const assetsHandlers = require('./src/ipc-handlers/assets');
+const partialsHandlers = require('./src/ipc-handlers/partials');
+const seedExamplesHandlers = require('./src/ipc-handlers/seed-examples');
 const credentialsStore = require('./src/database/credentials-store');
 const { getPreferences } = require('./src/database/preferences-store');
+const boqHandlers = require('./src/ipc-handlers/boq');
+const boqOptionsStore = require('./src/database/boq-options-store');
 
 // Initialize electron-store for secure settings storage
 const store = new Store();
@@ -809,6 +814,32 @@ ipcMain.handle('jobs:get-database-tables', async (event) => {
 });
 
 // ============================================================
+// IPC Handlers for BOQ (Bill of Quantities)
+// ============================================================
+
+ipcMain.handle('boq:get-job-bill', boqHandlers.getJobBill);
+ipcMain.handle('boq:add-item', boqHandlers.addItem);
+ipcMain.handle('boq:update-item', boqHandlers.updateItem);
+ipcMain.handle('boq:delete-item', boqHandlers.deleteItem);
+ipcMain.handle('boq:get-cost-centres-with-budgets', boqHandlers.getCostCentresWithBudgets);
+ipcMain.handle('boq:reprice-bill', boqHandlers.repriceBill);
+ipcMain.handle('boq:explode-recipe', boqHandlers.explodeRecipe);
+ipcMain.handle('boq:get-loads', boqHandlers.getLoads);
+ipcMain.handle('boq:create-load', boqHandlers.createLoad);
+ipcMain.handle('boq:generate-report', boqHandlers.generateReport);
+
+// ============================================================
+// IPC Handlers for BOQ Options Store (Persistent)
+// ============================================================
+
+ipcMain.handle('boq-options:get', (event) => boqOptionsStore.getOptions());
+ipcMain.handle('boq-options:save', (event, options) => boqOptionsStore.saveOptions(options));
+ipcMain.handle('boq-options:update', (event, key, value) => boqOptionsStore.updateOption(key, value));
+ipcMain.handle('boq-options:reset', (event) => boqOptionsStore.resetOptions());
+ipcMain.handle('boq-options:get-defaults', (event) => boqOptionsStore.getDefaults());
+ipcMain.handle('boq-options:save-last-used', (event, lastUsed) => boqOptionsStore.saveLastUsed(lastUsed));
+
+// ============================================================
 // IPC Handlers for Templates Store (Persistent)
 // ============================================================
 
@@ -1298,6 +1329,7 @@ ipcMain.handle('po-templates:get-by-category', poTemplatesHandlers.getTemplatesB
 ipcMain.handle('po-templates:search', poTemplatesHandlers.searchTemplates);
 ipcMain.handle('po-templates:preview', poTemplatesHandlers.previewTemplate);
 ipcMain.handle('po-templates:get-sample-data', poTemplatesHandlers.getSampleData);
+ipcMain.handle('po-templates:preview-custom-html', poTemplatesHandlers.previewCustomHTML);
 
 // ============================================================
 // IPC Handlers for Purchase Orders
@@ -1309,9 +1341,20 @@ ipcMain.handle('purchase-orders:get-orders-for-job', purchaseOrdersHandlers.getO
 ipcMain.handle('purchase-orders:get-order-line-items', purchaseOrdersHandlers.getOrderLineItems);
 ipcMain.handle('purchase-orders:get-order-summary', purchaseOrdersHandlers.getOrderSummary);
 ipcMain.handle('purchase-orders:render-preview', purchaseOrdersHandlers.renderOrderPreview);
+ipcMain.handle('purchase-orders:render-pdf', purchaseOrdersHandlers.renderOrderToPDF);
 ipcMain.handle('purchase-orders:get-cost-centres', purchaseOrdersHandlers.getCostCentres);
 ipcMain.handle('purchase-orders:get-preferred-suppliers', purchaseOrdersHandlers.getPreferredSuppliers);
 ipcMain.handle('purchase-orders:get-suppliers-for-cost-centre', purchaseOrdersHandlers.getSuppliersForCostCentre);
+ipcMain.handle('purchase-orders:update-order', purchaseOrdersHandlers.updateOrder);
+ipcMain.handle('purchase-orders:log-order', purchaseOrdersHandlers.logOrder);
+ipcMain.handle('purchase-orders:get-order-details', purchaseOrdersHandlers.getOrderDetails);
+ipcMain.handle('purchase-orders:batch-render-pdf', purchaseOrdersHandlers.batchRenderPDF);
+ipcMain.handle('purchase-orders:batch-print', purchaseOrdersHandlers.batchPrint);
+ipcMain.handle('purchase-orders:batch-email', purchaseOrdersHandlers.batchEmail);
+ipcMain.handle('purchase-orders:batch-save-pdf', purchaseOrdersHandlers.batchSavePDF);
+ipcMain.handle('purchase-orders:get-all-suppliers', purchaseOrdersHandlers.getAllSuppliers);
+ipcMain.handle('purchase-orders:add-nominated-supplier', purchaseOrdersHandlers.addNominatedSupplier);
+ipcMain.handle('purchase-orders:remove-nominated-supplier', purchaseOrdersHandlers.removeNominatedSupplier);
 
 // ============================================================
 // IPC Handlers for Purchase Order Printing/PDF
@@ -1329,6 +1372,38 @@ ipcMain.handle('po-print:get-pdf-settings', poPrintHandlers.getPDFSettings);
 ipcMain.handle('po-diagnostics:check-data', poDiagnosticsHandlers.checkPOData);
 ipcMain.handle('po-diagnostics:get-sample-data', poDiagnosticsHandlers.getSamplePOData);
 
+// ============================================================
+// IPC Handlers for Assets Library
+// ============================================================
+
+ipcMain.handle('assets:upload', assetsHandlers.uploadAsset);
+ipcMain.handle('assets:get-all', assetsHandlers.getAssets);
+ipcMain.handle('assets:get', assetsHandlers.getAsset);
+ipcMain.handle('assets:get-by-name', assetsHandlers.getAssetByName);
+ipcMain.handle('assets:delete', assetsHandlers.deleteAsset);
+ipcMain.handle('assets:update', assetsHandlers.updateAsset);
+ipcMain.handle('assets:get-stats', assetsHandlers.getAssetStats);
+ipcMain.handle('assets:clear-all', assetsHandlers.clearAllAssets);
+
+// Template Partials
+ipcMain.handle('partials:save', partialsHandlers.savePartial);
+ipcMain.handle('partials:get-all', partialsHandlers.getPartials);
+ipcMain.handle('partials:get', partialsHandlers.getPartial);
+ipcMain.handle('partials:get-by-name', partialsHandlers.getPartialByName);
+ipcMain.handle('partials:delete', partialsHandlers.deletePartial);
+ipcMain.handle('partials:update', partialsHandlers.updatePartial);
+ipcMain.handle('partials:get-stats', partialsHandlers.getPartialStats);
+ipcMain.handle('partials:clear-all', partialsHandlers.clearAllPartials);
+ipcMain.handle('partials:get-handlebars', partialsHandlers.getHandlebarsPartials);
+ipcMain.handle('partials:import', partialsHandlers.importPartials);
+ipcMain.handle('partials:export', partialsHandlers.exportPartials);
+
+// Seed Example Data
+ipcMain.handle('seed:all', seedExamplesHandlers.seedAll);
+ipcMain.handle('seed:assets', seedExamplesHandlers.seedAssets);
+ipcMain.handle('seed:partials', seedExamplesHandlers.seedPartials);
+ipcMain.handle('seed:clear-all', seedExamplesHandlers.clearAll);
+ipcMain.handle('seed:clear-partials', seedExamplesHandlers.clearPartials);
 
 // ============================================================
 // App Lifecycle

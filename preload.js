@@ -109,6 +109,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDatabaseTables: () => ipcRenderer.invoke('jobs:get-database-tables')
   },
 
+  // Bill of Quantities (BOQ)
+  boq: {
+    getJobBill: (jobNo, costCentre, bLoad) => ipcRenderer.invoke('boq:get-job-bill', { jobNo, costCentre, bLoad }),
+    addItem: (billItem) => ipcRenderer.invoke('boq:add-item', billItem),
+    updateItem: (billItem) => ipcRenderer.invoke('boq:update-item', billItem),
+    deleteItem: (jobNo, costCentre, bLoad, lineNumber) => ipcRenderer.invoke('boq:delete-item', { jobNo, costCentre, bLoad, lineNumber }),
+    getCostCentresWithBudgets: (jobNo) => ipcRenderer.invoke('boq:get-cost-centres-with-budgets', { jobNo }),
+    repriceBill: (jobNo, priceLevel, billDate) => ipcRenderer.invoke('boq:reprice-bill', { jobNo, priceLevel, billDate }),
+    explodeRecipe: (jobNo, costCentre, bLoad, priceCode, quantity, options) => ipcRenderer.invoke('boq:explode-recipe', { jobNo, costCentre, bLoad, priceCode, quantity, options }),
+    getLoads: (jobNo, costCentre) => ipcRenderer.invoke('boq:get-loads', { jobNo, costCentre }),
+    createLoad: (jobNo, costCentre) => ipcRenderer.invoke('boq:create-load', { jobNo, costCentre }),
+    generateReport: (reportType, jobNo, costCentre) => ipcRenderer.invoke('boq:generate-report', { reportType, jobNo, costCentre })
+  },
+
+  // BOQ Options Store (electron-store persistent storage)
+  boqOptions: {
+    get: () => ipcRenderer.invoke('boq-options:get'),
+    save: (options) => ipcRenderer.invoke('boq-options:save', options),
+    update: (key, value) => ipcRenderer.invoke('boq-options:update', key, value),
+    reset: () => ipcRenderer.invoke('boq-options:reset'),
+    getDefaults: () => ipcRenderer.invoke('boq-options:get-defaults'),
+    saveLastUsed: (lastUsed) => ipcRenderer.invoke('boq-options:save-last-used', lastUsed)
+  },
+
   // Templates Store (electron-store persistent storage)
   templatesStore: {
     getList: (params) => ipcRenderer.invoke('templates-store:get-list', params),
@@ -235,7 +259,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getByCategory: (category) => ipcRenderer.invoke('po-templates:get-by-category', category),
     search: (query) => ipcRenderer.invoke('po-templates:search', query),
     preview: (templateId, settings) => ipcRenderer.invoke('po-templates:preview', templateId, settings),
-    getSampleData: () => ipcRenderer.invoke('po-templates:get-sample-data')
+    getSampleData: () => ipcRenderer.invoke('po-templates:get-sample-data'),
+    previewCustomHTML: (html) => ipcRenderer.invoke('po-templates:preview-custom-html', html)
   },
 
   // Purchase Orders (database operations and rendering)
@@ -246,9 +271,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getOrderLineItems: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-line-items', orderNumber),
     getOrderSummary: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-summary', orderNumber),
     renderPreview: (orderNumber, settings) => ipcRenderer.invoke('purchase-orders:render-preview', orderNumber, settings),
+    renderPDF: (orderNumber, settings) => ipcRenderer.invoke('purchase-orders:render-pdf', orderNumber, settings),
     getCostCentres: () => ipcRenderer.invoke('purchase-orders:get-cost-centres'),
     getPreferredSuppliers: (costCentre) => ipcRenderer.invoke('purchase-orders:get-preferred-suppliers', costCentre),
-    getSuppliersForCostCentre: (costCentre) => ipcRenderer.invoke('purchase-orders:get-suppliers-for-cost-centre', costCentre)
+    getSuppliersForCostCentre: (costCentre) => ipcRenderer.invoke('purchase-orders:get-suppliers-for-cost-centre', costCentre),
+    updateOrder: (orderNumber, updates) => ipcRenderer.invoke('purchase-orders:update-order', orderNumber, updates),
+    logOrder: (orderNumber, supplier, delDate, note) => ipcRenderer.invoke('purchase-orders:log-order', orderNumber, supplier, delDate, note),
+    getOrderDetails: (orderNumber) => ipcRenderer.invoke('purchase-orders:get-order-details', orderNumber),
+    batchRenderPDF: (orderNumbers, settings) => ipcRenderer.invoke('purchase-orders:batch-render-pdf', orderNumbers, settings),
+    batchPrint: (orderNumbers, settings) => ipcRenderer.invoke('purchase-orders:batch-print', orderNumbers, settings),
+    batchEmail: (orderNumbers, settings) => ipcRenderer.invoke('purchase-orders:batch-email', orderNumbers, settings),
+    batchSavePDF: (orderNumbers, settings) => ipcRenderer.invoke('purchase-orders:batch-save-pdf', orderNumbers, settings),
+    getAllSuppliers: () => ipcRenderer.invoke('purchase-orders:get-all-suppliers'),
+    addNominatedSupplier: (costCentre, supplierCode) => ipcRenderer.invoke('purchase-orders:add-nominated-supplier', costCentre, supplierCode),
+    removeNominatedSupplier: (costCentre, supplierCode) => ipcRenderer.invoke('purchase-orders:remove-nominated-supplier', costCentre, supplierCode)
   },
 
   // Purchase Order Printing and PDF
@@ -257,6 +293,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveAsPDF: (orderNumber, settings) => ipcRenderer.invoke('po-print:save-pdf', orderNumber, settings),
     generatePDF: (orderNumber, settings) => ipcRenderer.invoke('po-print:generate-pdf', orderNumber, settings),
     getPDFSettings: () => ipcRenderer.invoke('po-print:get-pdf-settings')
+  },
+
+  // Assets Library (shared resources for templates)
+  assets: {
+    upload: (assetData) => ipcRenderer.invoke('assets:upload', assetData),
+    getAll: (filters) => ipcRenderer.invoke('assets:get-all', filters),
+    get: (id) => ipcRenderer.invoke('assets:get', id),
+    getByName: (name) => ipcRenderer.invoke('assets:get-by-name', name),
+    delete: (id) => ipcRenderer.invoke('assets:delete', id),
+    update: (id, updates) => ipcRenderer.invoke('assets:update', id, updates),
+    getStats: () => ipcRenderer.invoke('assets:get-stats'),
+    clearAll: () => ipcRenderer.invoke('assets:clear-all')
+  },
+
+  // Template Partials (reusable template fragments)
+  partials: {
+    save: (partialData) => ipcRenderer.invoke('partials:save', partialData),
+    getAll: (filters) => ipcRenderer.invoke('partials:get-all', filters),
+    get: (id) => ipcRenderer.invoke('partials:get', id),
+    getByName: (name) => ipcRenderer.invoke('partials:get-by-name', name),
+    delete: (id) => ipcRenderer.invoke('partials:delete', id),
+    update: (id, updates) => ipcRenderer.invoke('partials:update', id, updates),
+    getStats: () => ipcRenderer.invoke('partials:get-stats'),
+    clearAll: () => ipcRenderer.invoke('partials:clear-all'),
+    getHandlebars: () => ipcRenderer.invoke('partials:get-handlebars'),
+    import: (partialsData) => ipcRenderer.invoke('partials:import', partialsData),
+    export: () => ipcRenderer.invoke('partials:export')
+  },
+
+  // Seed Example Data
+  seed: {
+    all: () => ipcRenderer.invoke('seed:all'),
+    assets: () => ipcRenderer.invoke('seed:assets'),
+    partials: () => ipcRenderer.invoke('seed:partials'),
+    clearAll: () => ipcRenderer.invoke('seed:clear-all'),
+    clearPartials: () => ipcRenderer.invoke('seed:clear-partials')
   },
 
   // Event listeners

@@ -221,7 +221,19 @@ async function setDefaultTemplate(event, templateId) {
 async function loadTemplateHTML(event, templateId) {
   try {
     const html = await templateManager.loadTemplateHTML(templateId);
-    return { success: true, html };
+    const template = await templateManager.getTemplateById(templateId);
+
+    // Get the template path
+    let path = 'Unknown';
+    if (template) {
+      if (template.isBuiltIn) {
+        path = `src/templates/purchase-orders/${template.category}/${templateId}.hbs`;
+      } else {
+        path = `Custom template: ${template.name}`;
+      }
+    }
+
+    return { success: true, html, path };
   } catch (error) {
     console.error('Error loading template HTML:', error);
     return { success: false, message: error.message };
@@ -302,9 +314,100 @@ async function previewTemplate(event, templateId, settings = {}) {
       customizations: settings.customizations || null
     };
 
-    // Compile and render with sample data
+    // Register helpers on global Handlebars instance
     const Handlebars = require('handlebars');
-    templateRenderer.registerHelpers(); // Ensure helpers are registered
+
+    // Register all the helpers that the template needs
+    Handlebars.registerHelper('currency', (value) => {
+      if (value === null || value === undefined) return '$0.00';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '$0.00';
+      return `$${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    });
+
+    Handlebars.registerHelper('formatCurrency', (value) => {
+      if (value === null || value === undefined) return '$0.00';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '$0.00';
+      return `$${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    });
+
+    Handlebars.registerHelper('formatNumber', (value, decimals = 2) => {
+      if (value === null || value === undefined) return '0';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '0';
+      return num.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    });
+
+    Handlebars.registerHelper('formatDate', (date, format) => {
+      if (!date) return '';
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+
+      if (format === 'MM/DD/YYYY') {
+        return `${month}/${day}/${year}`;
+      } else if (format === 'YYYY-MM-DD') {
+        return `${year}-${month}-${day}`;
+      }
+
+      return `${day}/${month}/${year}`;
+    });
+
+    Handlebars.registerHelper('ifEquals', function(arg1, arg2, options) {
+      return (arg1 === arg2) ? options.fn(this) : options.inverse(this);
+    });
+
+    Handlebars.registerHelper('ifNotEquals', function(arg1, arg2, options) {
+      return (arg1 !== arg2) ? options.fn(this) : options.inverse(this);
+    });
+
+    Handlebars.registerHelper('calculateGST', (amount, rate = 0.10) => {
+      if (!amount) return 0;
+      return parseFloat(amount) * parseFloat(rate);
+    });
+
+    Handlebars.registerHelper('or', function() {
+      return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
+    });
+
+    Handlebars.registerHelper('and', function() {
+      return Array.prototype.slice.call(arguments, 0, -1).every(Boolean);
+    });
+
+    // Math helpers
+    Handlebars.registerHelper('add', function(a, b) {
+      return Number(a) + Number(b);
+    });
+
+    Handlebars.registerHelper('subtract', function(a, b) {
+      return Number(a) - Number(b);
+    });
+
+    Handlebars.registerHelper('multiply', function(a, b) {
+      return Number(a) * Number(b);
+    });
+
+    Handlebars.registerHelper('startsWith', function(str, prefix) {
+      if (!str || !prefix) return false;
+      return String(str).startsWith(String(prefix));
+    });
+
+    Handlebars.registerHelper('calculateLineTotal', function(quantity, unitPrice, unit) {
+      const qty = parseFloat(quantity) || 0;
+      const price = parseFloat(unitPrice) || 0;
+
+      // If unit is %, calculate as percentage of unit price
+      if (unit === '%') {
+        return price * (qty / 100);
+      }
+
+      // Standard calculation
+      return qty * price;
+    });
 
     const template = Handlebars.compile(html);
 
@@ -314,9 +417,27 @@ async function previewTemplate(event, templateId, settings = {}) {
     sampleData.showSupplierRef = renderSettings.codeDisplay === 'supplier' || renderSettings.codeDisplay === 'both';
     sampleData.gstMode = renderSettings.gstMode;
 
-    // Add customizations if provided
-    if (renderSettings.customizations) {
-      sampleData.customizations = renderSettings.customizations;
+    // Add customizations with defaults
+    sampleData.customizations = {
+      sections: {
+        showCompanyHeader: true,
+        showJobDetails: true,
+        showSupplierAddress: true,
+        showNotes: true,
+        showFooter: true
+      },
+      colors: {},
+      fonts: {},
+      content: {},
+      ...renderSettings.customizations
+    };
+
+    // Ensure nested objects are merged properly
+    if (renderSettings.customizations && renderSettings.customizations.sections) {
+      sampleData.customizations.sections = {
+        ...sampleData.customizations.sections,
+        ...renderSettings.customizations.sections
+      };
     }
 
     const renderedHTML = template(sampleData);
@@ -347,6 +468,134 @@ async function getSampleData(event) {
   }
 }
 
+/**
+ * Preview custom HTML with sample data (for live preview in editor)
+ */
+async function previewCustomHTML(event, html) {
+  try {
+    // Get sample data
+    const sampleData = templateRenderer.getSampleData();
+
+    // Register helpers on global Handlebars instance
+    const Handlebars = require('handlebars');
+
+    // Register all the helpers that the template needs
+    Handlebars.registerHelper('currency', (value) => {
+      if (value === null || value === undefined) return '$0.00';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '$0.00';
+      return `$${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    });
+
+    Handlebars.registerHelper('formatCurrency', (value) => {
+      if (value === null || value === undefined) return '$0.00';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '$0.00';
+      return `$${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    });
+
+    Handlebars.registerHelper('formatNumber', (value, decimals = 2) => {
+      if (value === null || value === undefined) return '0';
+      const num = parseFloat(value);
+      if (isNaN(num)) return '0';
+      return num.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    });
+
+    Handlebars.registerHelper('formatDate', (date, format) => {
+      if (!date) return '';
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+
+      if (format === 'MM/DD/YYYY') {
+        return `${month}/${day}/${year}`;
+      } else if (format === 'YYYY-MM-DD') {
+        return `${year}-${month}-${day}`;
+      }
+
+      return `${day}/${month}/${year}`;
+    });
+
+    Handlebars.registerHelper('ifEquals', function(arg1, arg2, options) {
+      return (arg1 === arg2) ? options.fn(this) : options.inverse(this);
+    });
+
+    Handlebars.registerHelper('ifNotEquals', function(arg1, arg2, options) {
+      return (arg1 !== arg2) ? options.fn(this) : options.inverse(this);
+    });
+
+    Handlebars.registerHelper('calculateGST', (amount, rate = 0.10) => {
+      if (!amount) return 0;
+      return parseFloat(amount) * parseFloat(rate);
+    });
+
+    Handlebars.registerHelper('or', function() {
+      return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
+    });
+
+    Handlebars.registerHelper('and', function() {
+      return Array.prototype.slice.call(arguments, 0, -1).every(Boolean);
+    });
+
+    Handlebars.registerHelper('startsWith', function(str, prefix) {
+      if (!str || !prefix) return false;
+      return String(str).startsWith(String(prefix));
+    });
+
+    Handlebars.registerHelper('calculateLineTotal', function(quantity, unitPrice, unit) {
+      const qty = parseFloat(quantity) || 0;
+      const price = parseFloat(unitPrice) || 0;
+
+      // If unit is %, calculate as percentage of unit price
+      if (unit === '%') {
+        return price * (qty / 100);
+      }
+
+      // Standard calculation
+      return qty * price;
+    });
+
+    // Compile and render
+    const template = Handlebars.compile(html);
+
+    // Add display flags to sample data
+    sampleData.showPrices = true;
+    sampleData.showLinePrices = true;
+    sampleData.showSupplierRef = false;
+    sampleData.gstMode = 'total';
+
+    // Add customizations with defaults
+    sampleData.customizations = {
+      sections: {
+        showCompanyHeader: true,
+        showJobDetails: true,
+        showSupplierAddress: true,
+        showNotes: true,
+        showFooter: true
+      },
+      colors: {},
+      fonts: {},
+      content: {}
+    };
+
+    const renderedHTML = template(sampleData);
+
+    return {
+      success: true,
+      html: renderedHTML
+    };
+  } catch (error) {
+    console.error('Error previewing custom HTML:', error);
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
 module.exports = {
   getAllTemplates,
   getBuiltInTemplates,
@@ -366,5 +615,6 @@ module.exports = {
   getTemplatesByCategory,
   searchTemplates,
   previewTemplate,
-  getSampleData
+  getSampleData,
+  previewCustomHTML
 };

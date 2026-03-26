@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order - {{orderNumber}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 4px solid #28a745;
+        }
+
+        .logo-section {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .company-info h1 {
+            color: #28a745;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .company-info p {
+            color: #666;
+            font-size: 13px;
+            margin: 3px 0;
+        }
+
+        .po-title {
+            flex: 1;
+            text-align: right;
+        }
+
+        .po-title h2 {
+            color: #28a745;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .po-number {
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            display: inline-block;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            border-left: 4px solid #28a745;
+        }
+
+        .info-card h3 {
+            color: #28a745;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-card p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .info-card .label {
+            color: #666;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        th {
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 15px 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tbody tr {
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .totals-section {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .totals-table {
+            width: 350px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+        }
+
+        .totals-table table {
+            margin: 0;
+        }
+
+        .totals-table td {
+            padding: 8px;
+            border: none;
+        }
+
+        .totals-table .total-row {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+            border-top: 2px solid #28a745;
+        }
+
+        .notes-section {
+            background: #fff9e6;
+            border: 2px dashed #ffc107;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 30px 0;
+        }
+
+        .notes-section h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .terms-section {
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+
+        .terms-section h3 {
+            color: #0066cc;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .terms-section ul {
+            list-style-position: inside;
+            color: #333;
+        }
+
+        .terms-section li {
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e9ecef;
+            text-align: center;
+        }
+
+        .signature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+
+        .signature-box {
+            text-align: center;
+        }
+
+        .signature-line {
+            border-bottom: 2px solid #333;
+            margin: 40px 20px 10px;
+        }
+
+        .signature-box p {
+            font-size: 12px;
+            color: #666;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <div class="company-info">
+                    <h1>{{#if customizations.companyName}}{{customizations.companyName}}{{else}}Your Company Name{{/if}}</h1>
+                    <p><strong>ABN:</strong> {{#if customizations.companyABN}}{{customizations.companyABN}}{{/if}}</p>
+                </div>
+            </div>
+            <div class="po-title">
+                <h2>PURCHASE ORDER</h2>
+                <div class="po-number">PO-{{OrderNumber}}</div>
+            </div>
+        </div>
+
+        <!-- Vendor and Order Info -->
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>Vendor Information</h3>
+                <p><strong>{{SupplierName}}</strong></p>
+                <p>{{AccountAddress}}</p>
+                <p>{{AccountCity}}, {{AccountState}} {{AccountPostcode}}</p>
+                <p class="label">Contact: {{AccountContact}}</p>
+                <p>Phone: {{AccountPhone}}</p>
+                <p>Email: {{AccountEmail}}</p>
+            </div>
+
+            <div class="info-card">
+                <h3>Order Details</h3>
+                <p class="label">Order Number:</p>
+                <p><strong>{{OrderNumber}}</strong></p>
+                <p class="label">Job:</p>
+                <p><strong>{{JobNo}} - {{JobName}}</strong></p>
+                <p class="label">Client:</p>
+                <p><strong>{{Client}}</strong></p>
+                <p class="label">Cost Centre:</p>
+                <p>{{CostCentre}} - {{CostCentreName}}</p>
+            </div>
+        </div>
+
+        <!-- Site Info -->
+        {{#if SiteStreet}}
+        <div class="info-card" style="margin: 20px 0;">
+            <h3>Delivery Location</h3>
+            <p><strong>{{SiteStreet}}</strong></p>
+            <p>{{SiteSuburb}}, {{SiteState}}</p>
+            {{#if Supervisor}}
+            <p><strong>Site Supervisor:</strong> {{Supervisor}}</p>
+            {{#if SupervisorPhone}}<p>Phone: {{SupervisorPhone}}</p>{{/if}}
+            {{/if}}
+        </div>
+        {{/if}}
+
+        <!-- Line Items -->
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 18%;">Code</th>
+                    <th style="width: 40%;">Description</th>
+                    <th style="width: 10%;">Qty</th>
+                    <th style="width: 10%;">Unit</th>
+                    <th style="width: 11%;">Unit Price</th>
+                    <th style="width: 11%;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td>{{ItemCode}}</td>
+                    <td>
+                        {{Description}}
+                        {{#if Workup}}
+                          {{#unless (startsWith Workup "[Hide]")}}
+                          <br><small style="color: #666;">{{Workup}}</small>
+                          {{/unless}}
+                        {{/if}}
+                    </td>
+                    <td style="text-align: right;">{{Quantity}}</td>
+                    <td>{{Unit}}</td>
+                    {{#if ../showLinePrices}}
+                    <td style="text-align: right;">{{formatCurrency UnitPrice}}</td>
+                    <td style="text-align: right;">{{formatCurrency (calculateLineTotal Quantity UnitPrice Unit)}}</td>
+                    {{else}}
+                    <td style="text-align: right;">-</td>
+                    <td style="text-align: right;">-</td>
+                    {{/if}}
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        {{#if showPrices}}
+        <div class="totals-section">
+            <div class="totals-table">
+                <table>
+                    <tr>
+                        <td>Subtotal:</td>
+                        <td style="text-align: right;"><strong>{{formatCurrency SubTotal}}</strong></td>
+                    </tr>
+                    {{#if GSTAmount}}
+                    <tr>
+                        <td>GST (10%):</td>
+                        <td style="text-align: right;"><strong>{{formatCurrency GSTAmount}}</strong></td>
+                    </tr>
+                    {{/if}}
+                    <tr class="total-row">
+                        <td>TOTAL:</td>
+                        <td style="text-align: right;">{{formatCurrency GrandTotal}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {{/if}}
+
+        <!-- Special Instructions -->
+        {{#if SpecialInstructions}}
+        <div class="notes-section">
+            <h3>📋 Special Instructions</h3>
+            <p>{{SpecialInstructions}}</p>
+        </div>
+        {{/if}}
+
+        <!-- Standard Notes -->
+        {{#each StandardNotes}}
+        <div class="notes-section">
+            <h3>📋 {{NoteCode}}</h3>
+            <p>{{NoteText}}</p>
+        </div>
+        {{/each}}
+
+        <!-- Terms & Conditions -->
+        <div class="terms-section">
+            <h3>Terms & Conditions</h3>
+            <ul>
+                <li>All goods must be delivered to the specified job address</li>
+                <li>Invoices must reference this PO number: <strong>PO-{{OrderNumber}}</strong></li>
+                <li>Work and materials must meet BCOA Standards</li>
+                <li>Insurance and safety documentation must be current</li>
+                <li>Payment terms: {{#if PaymentTerms}}{{PaymentTerms}}{{else}}30 days{{/if}}</li>
+                <li>Any variations must be approved in writing before proceeding</li>
+            </ul>
+        </div>
+
+        <!-- Signatures -->
+        <div class="signature-grid">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <p><strong>Authorized By</strong></p>
+                <p>{{formatDate CurrentDate 'DD/MM/YYYY'}}</p>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <p><strong>Vendor Acceptance</strong></p>
+                <p>{{formatDate CurrentDate 'DD/MM/YYYY'}}</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p style="font-size: 11px; color: #666;">
+                {{footerText}}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

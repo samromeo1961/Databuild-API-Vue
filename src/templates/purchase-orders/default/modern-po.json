@@ -1,0 +1,81 @@
+{
+  "id": "modern-po",
+  "name": "Modern Purchase Order (Green)",
+  "description": "Modern design with green gradient header, professional card-based layout, and enhanced visual styling",
+  "category": "Modern",
+  "type": "PO",
+  "author": "DBx Connector",
+  "version": "1.0.0",
+  "created": "2025-01-16",
+  "templateFile": "modern-po.hbs",
+  "previewImage": null,
+  "customizable": {
+    "logo": true,
+    "colors": true,
+    "fonts": true,
+    "sections": {
+      "showVendorInfo": true,
+      "showOrderDetails": true,
+      "showProjectInfo": true,
+      "showLineItems": true,
+      "showTotals": true,
+      "showNotes": true,
+      "showTerms": true,
+      "showSignatures": true
+    },
+    "content": {
+      "companyName": true,
+      "companyABN": true,
+      "paymentTerms": true,
+      "footerText": true
+    }
+  },
+  "defaultCustomizations": {
+    "logo": null,
+    "companyName": "Your Company Name",
+    "companyABN": "12 345 678 901",
+    "colors": {
+      "primary": "#28a745",
+      "secondary": "#20c997",
+      "text": "#333333",
+      "background": "#ffffff"
+    },
+    "fonts": {
+      "header": "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      "body": "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    },
+    "sections": {
+      "showVendorInfo": true,
+      "showOrderDetails": true,
+      "showProjectInfo": true,
+      "showLineItems": true,
+      "showTotals": true,
+      "showNotes": true,
+      "showTerms": true,
+      "showSignatures": true
+    },
+    "content": {
+      "paymentTerms": "30 days from date of invoice",
+      "footerText": "This purchase order constitutes a legally binding agreement. Please retain a copy for your records.",
+      "dateFormat": "DD/MM/YYYY"
+    }
+  },
+  "features": [
+    "Modern green gradient theme",
+    "Professional card-based information layout",
+    "Responsive two-column grid system",
+    "Enhanced visual hierarchy with borders and shadows",
+    "Line items with workup notes support",
+    "Subtotal, GST, and Total calculations",
+    "Yellow highlighted notes section",
+    "Blue themed terms & conditions",
+    "Two-column signature section",
+    "Print-optimized responsive design"
+  ],
+  "suitableFor": [
+    "Modern purchase orders",
+    "Professional supplier communications",
+    "Construction and building industry",
+    "Standard procurement with enhanced presentation"
+  ]
+}

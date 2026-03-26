@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Purchase Order {{OrderNumber}}</title>
+  <title>Purchase Order 1483/250.1</title>
   <style>
     :root {
-      --primary-color: {{#if customizations.colors.primary}}{{customizations.colors.primary}}{{else}}#003366{{/if}};
-      --secondary-color: {{#if customizations.colors.secondary}}{{customizations.colors.secondary}}{{else}}#0066cc{{/if}};
-      --text-color: {{#if customizations.colors.text}}{{customizations.colors.text}}{{else}}#333333{{/if}};
-      --background-color: {{#if customizations.colors.background}}{{customizations.colors.background}}{{else}}#ffffff{{/if}};
-      --header-font: {{#if customizations.fonts.header}}{{customizations.fonts.header}}{{else}}Arial, sans-serif{{/if}};
-      --body-font: {{#if customizations.fonts.body}}{{customizations.fonts.body}}{{else}}Helvetica, Arial, sans-serif{{/if}};
+      --primary-color: #003366;
+      --secondary-color: #0066cc;
+      --text-color: #333333;
+      --background-color: #ffffff;
+      --header-font: Arial, sans-serif;
+      --body-font: Helvetica, Arial, sans-serif;
     }
 
     * {
@@ -292,150 +292,96 @@
 <body>
   <div class="page">
     <!-- Header -->
-    {{#if customizations.sections.showCompanyHeader}}
     <div class="header">
       <div class="company-info">
-        {{#if customizations.logo}}
-        <img src="{{customizations.logo}}" alt="Company Logo" class="company-logo">
-        {{/if}}
-        <div class="company-name">{{#if customizations.companyName}}{{customizations.companyName}}{{else}}Your Company Name{{/if}}</div>
-        {{#if customizations.tagline}}
-        <div class="company-tagline">{{customizations.tagline}}</div>
-        {{/if}}
+        <div class="company-name">Your Company Name</div>
       </div>
       <div class="document-title">
         <h1>PURCHASE ORDER</h1>
-        <div class="po-number">PO# {{OrderNumber}}</div>
+        <div class="po-number">PO# 1483/250.1</div>
       </div>
     </div>
-    {{else}}
-    <div class="header">
-      <div class="company-info">
-        <div class="company-name">Purchase Order</div>
-      </div>
-      <div class="document-title">
-        <h1>{{OrderNumber}}</h1>
-      </div>
-    </div>
-    {{/if}}
 
     <!-- Order and Supplier Info -->
     <div class="info-section">
       <!-- Order Details -->
-      {{#if customizations.sections.showJobDetails}}
       <div class="info-box">
         <h3>Order Details</h3>
         <div class="info-row">
           <span class="info-label">Order Number:</span>
-          <span class="info-value">{{OrderNumber}}</span>
+          <span class="info-value">1483/250.1</span>
         </div>
         <div class="info-row">
           <span class="info-label">Order Date:</span>
-          <span class="info-value">{{formatDate OrderDate}}</span>
+          <span class="info-value">12/07/2024</span>
         </div>
-        {{#if DelDate}}
         <div class="info-row">
           <span class="info-label">Delivery Date:</span>
-          <span class="info-value">{{formatDate DelDate}}</span>
+          <span class="info-value">20/07/2024</span>
         </div>
-        {{else}}
-        <div class="info-row">
-          <span class="info-label">Delivery Date:</span>
-          <span class="info-value">TBA</span>
-        </div>
-        {{/if}}
         <div class="info-row">
           <span class="info-label">Job Number:</span>
-          <span class="info-value">{{JobNo}}</span>
+          <span class="info-value">1483</span>
         </div>
         <div class="info-row">
           <span class="info-label">Job Name:</span>
-          <span class="info-value">{{JobName}}</span>
+          <span class="info-value">Sample Construction Project - 123 Main Street</span>
         </div>
-        {{#if Client}}
         <div class="info-row">
           <span class="info-label">Client:</span>
-          <span class="info-value">{{Client}}</span>
+          <span class="info-value">ABC Construction Pty Ltd</span>
         </div>
-        {{/if}}
         <div class="info-row">
           <span class="info-label">Cost Centre:</span>
-          <span class="info-value">{{CostCentre}} - {{CostCentreName}}</span>
+          <span class="info-value">250 - Sand &amp; Cement</span>
         </div>
       </div>
-      {{/if}}
 
       <!-- Supplier Details -->
-      {{#if customizations.sections.showSupplierAddress}}
       <div class="info-box">
         <div class="supplier-box">
           <h3>Supplier</h3>
-          <div class="info-value"><strong>{{SupplierName}}</strong></div>
-          {{#if AccountContact}}
+          <div class="info-value"><strong>Shepherds Group (NSW) Pty Ltd</strong></div>
           <div class="info-row">
             <span class="info-label">Contact:</span>
-            <span class="info-value">{{AccountContact}}</span>
+            <span class="info-value">John Smith</span>
           </div>
-          {{/if}}
-          {{#if AccountPhone}}
           <div class="info-row">
             <span class="info-label">Phone:</span>
-            <span class="info-value">{{AccountPhone}}</span>
+            <span class="info-value">02 1234 5678</span>
           </div>
-          {{/if}}
-          {{#if AccountEmail}}
           <div class="info-row">
             <span class="info-label">Email:</span>
-            <span class="info-value">{{AccountEmail}}</span>
+            <span class="info-value">john.smith@supplier.com.au</span>
           </div>
-          {{/if}}
-          {{#if AccountAddress}}
-          <div class="info-value" style="margin-top: 10px;">{{AccountAddress}}</div>
-          {{#if AccountCity}}
-          <div class="info-value">{{AccountCity}}, {{AccountState}} {{AccountPostcode}}</div>
-          {{/if}}
-          {{/if}}
+          <div class="info-value" style="margin-top: 10px;">123 Supply Street</div>
+          <div class="info-value">Sydney, NSW 2000</div>
         </div>
       </div>
-      {{/if}}
     </div>
 
     <!-- Site Address and Supervisor Info -->
     <div class="info-section">
       <!-- Site Address -->
-      {{#if customizations.sections.showJobDetails}}
-      {{#if SiteStreet}}
       <div class="info-box">
         <h3>Site Address</h3>
-        <div class="info-value">{{SiteStreet}}</div>
-        {{#if SiteSuburb}}
-        <div class="info-value">{{SiteSuburb}}, {{SiteState}}</div>
-        {{/if}}
+        <div class="info-value">45 Construction Avenue</div>
+        <div class="info-value">Parramatta, NSW</div>
       </div>
-      {{/if}}
-      {{/if}}
 
       <!-- Supervisor Details -->
-      {{#if customizations.sections.showJobDetails}}
-      {{#if Supervisor}}
       <div class="info-box">
         <h3>Site Supervisor</h3>
-        <div class="info-value"><strong>{{Supervisor}}</strong></div>
-        {{#if SupervisorPhone}}
+        <div class="info-value"><strong>Mike Johnson</strong></div>
         <div class="info-row">
           <span class="info-label">Phone:</span>
-          <span class="info-value">{{SupervisorPhone}}</span>
+          <span class="info-value">02 9876 5432</span>
         </div>
-        {{/if}}
-        {{#if SupervisorMobile}}
         <div class="info-row">
           <span class="info-label">Mobile:</span>
-          <span class="info-value">{{SupervisorMobile}}</span>
+          <span class="info-value">0412 345 678</span>
         </div>
-        {{/if}}
       </div>
-      {{/if}}
-      {{/if}}
     </div>
 
     <!-- Line Items Table -->
@@ -443,133 +389,71 @@
       <thead>
         <tr>
           <th style="width: 15%;">Item Code</th>
-          {{#if showSupplierRef}}
-          <th style="width: 12%;">Supplier Ref</th>
-          {{/if}}
-          <th style="width: {{#if showSupplierRef}}33%{{else}}45%{{/if}};">Description</th>
+          <th style="width: 45%;">Description</th>
           <th class="align-right" style="width: 10%;">Quantity</th>
           <th style="width: 8%;">Unit</th>
-          {{#if showLinePrices}}
           <th class="align-right" style="width: 12%;">Unit Price</th>
           <th class="align-right" style="width: 12%;">Total</th>
-          {{/if}}
         </tr>
       </thead>
       <tbody>
-        {{#each items}}
         <tr>
-          <td>{{ItemCode}}</td>
-          {{#if ../showSupplierRef}}
-          <td>{{SupplierReference}}</td>
-          {{/if}}
-          <td>{{Description}}</td>
-          <td class="align-right">{{formatNumber Quantity}}</td>
-          <td>{{Unit}}</td>
-          {{#if ../showLinePrices}}
-          <td class="align-right">{{currency UnitPrice}}</td>
-          <td class="align-right">{{currency (calculateLineTotal Quantity UnitPrice Unit)}}</td>
-          {{/if}}
+          <td>CEM001</td>
+          <td>Cement - General Purpose 20kg</td>
+          <td class="align-right">50.00</td>
+          <td>bag</td>
+          <td class="align-right">$12.50</td>
+          <td class="align-right">$625.00</td>
         </tr>
-        {{#if Workup}}
-          {{#unless (startsWith Workup "[Hide]")}}
-          <tr class="workup-row">
-            <td colspan="{{#if ../showLinePrices}}7{{else}}5{{/if}}">
-              {{Workup}}
-            </td>
-          </tr>
-          {{/unless}}
-        {{/if}}
-        {{/each}}
+        <tr>
+          <td>SAND001</td>
+          <td>Sand - Washed River Sand</td>
+          <td class="align-right">10.00</td>
+          <td>t</td>
+          <td class="align-right">$45.00</td>
+          <td class="align-right">$450.00</td>
+        </tr>
+        <tr class="workup-row">
+          <td colspan="7">
+            Delivered in bulk, spread evenly across site
+          </td>
+        </tr>
       </tbody>
     </table>
 
     <!-- Totals -->
-    {{#if showPrices}}
     <div class="totals-section">
       <div class="total-row">
         <span class="total-label">Subtotal:</span>
-        <span class="total-value">{{currency SubTotal}}</span>
+        <span class="total-value">$1,075.00</span>
       </div>
-      {{#if GSTAmount}}
-      {{#ifEquals gstMode 'perLine'}}
       <div class="total-row">
         <span class="total-label">GST (10%):</span>
-        <span class="total-value">{{currency GSTAmount}}</span>
+        <span class="total-value">$107.50</span>
       </div>
-      {{/ifEquals}}
-      {{#ifEquals gstMode 'total'}}
-      <div class="total-row">
-        <span class="total-label">GST (10%):</span>
-        <span class="total-value">{{currency GSTAmount}}</span>
-      </div>
-      {{/ifEquals}}
-      {{/if}}
       <div class="total-row grand-total">
         <span class="total-label">TOTAL:</span>
-        <span class="total-value">{{currency GrandTotal}}</span>
+        <span class="total-value">$1,182.50</span>
       </div>
     </div>
-    {{/if}}
 
     <!-- Special Instructions -->
-    {{#if SpecialInstructions}}
     <div class="notes-section">
       <h3>Special Instructions</h3>
       <div class="note">
-        <div class="note-content">{{SpecialInstructions}}</div>
+        <div class="note-content">Please deliver to back entrance after 2pm. Call supervisor on arrival.</div>
       </div>
     </div>
-    {{/if}}
 
     <!-- Standard Notes -->
-    {{#if standardNotes.length}}
-    {{#if customizations.sections.showNotes}}
-    <div class="notes-section">
-      <h3>Order Notes</h3>
-      {{#each standardNotes}}
-      <div class="note">
-        {{#if NoteCode}}
-        <div class="note-title">{{NoteCode}}</div>
-        {{/if}}
-        <div class="note-content">{{NoteText}}</div>
-      </div>
-      {{/each}}
-    </div>
-    {{/if}}
-    {{/if}}
 
     <!-- Global Notes -->
-    {{#if globalNotes.length}}
-    {{#if customizations.sections.showNotes}}
-    <div class="notes-section">
-      {{#unless standardNotes.length}}
-      <h3>Order Notes</h3>
-      {{/unless}}
-      {{#each globalNotes}}
-      <div class="note">
-        <div class="note-content">{{NoteText}}</div>
-      </div>
-      {{/each}}
-    </div>
-    {{/if}}
-    {{/if}}
 
     <!-- Footer -->
-    {{#if customizations.sections.showFooter}}
     <div class="footer">
-      {{#if customizations.content.footerText}}
-      <div class="footer-content">{{customizations.content.footerText}}</div>
-      {{/if}}
-      {{#if customizations.content.terms}}
-      <div class="footer-content"><strong>Terms:</strong> {{customizations.content.terms}}</div>
-      {{/if}}
-      <div>Purchase Order generated by DBx Connector Vue on {{formatDate currentDate}}</div>
+      <div class="footer-content">Thank you for your business</div>
+      <div>Purchase Order generated by DBx Connector Vue on 14/11/2025</div>
     </div>
-    {{else}}
-    <div class="footer">
-      <div>Purchase Order generated by DBx Connector Vue on {{formatDate currentDate}}</div>
-    </div>
-    {{/if}}
   </div>
 </body>
 </html>

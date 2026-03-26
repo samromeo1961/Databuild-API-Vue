@@ -6,9 +6,31 @@
         <div class="modal-header">
           <h5 class="modal-title">
             <i class="bi bi-eye me-2"></i>
-            Order Preview: {{ orderNumber }}
+            Order Preview: {{ currentOrderNumber }}
+            <span v-if="orderNumbers.length > 1" class="badge bg-secondary ms-2">
+              {{ currentIndex + 1 }} of {{ orderNumbers.length }}
+            </span>
           </h5>
-          <button type="button" class="btn-close" @click="closeModal"></button>
+          <div class="d-flex align-items-center gap-2">
+            <!-- Navigation for multiple orders -->
+            <div v-if="orderNumbers.length > 1" class="btn-group me-3">
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                @click="previousOrder"
+                :disabled="currentIndex === 0 || loading">
+                <i class="bi bi-chevron-left"></i>
+                Previous
+              </button>
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                @click="nextOrder"
+                :disabled="currentIndex === orderNumbers.length - 1 || loading">
+                Next
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+            <button type="button" class="btn-close" @click="closeModal"></button>
+          </div>
         </div>
 
         <!-- Settings Bar -->
@@ -16,9 +38,10 @@
           <div class="row g-3">
             <div class="col-md-3">
               <label class="form-label small">Template</label>
-              <select v-model="settings.template" @change="refreshPreview" class="form-select form-select-sm">
-                <option value="classic-po">Classic Purchase Order</option>
-                <!-- More templates will be loaded dynamically -->
+              <select v-model="settings.template" @change="saveTemplatePreference" class="form-select form-select-sm">
+                <option v-for="template in templates" :key="template.id" :value="template.id">
+                  {{ template.name }}
+                </option>
               </select>
             </div>
 
@@ -117,7 +140,7 @@ export default {
   name: 'OrderPreviewModal',
   props: {
     orderNumber: {
-      type: String,
+      type: [String, Array],
       required: true
     }
   },
@@ -125,10 +148,16 @@ export default {
   setup(props, { emit }) {
     const api = useElectronAPI();
 
+    // Handle both single order number and array of order numbers
+    const orderNumbers = ref(Array.isArray(props.orderNumber) ? props.orderNumber : [props.orderNumber]);
+    const currentIndex = ref(0);
+    const currentOrderNumber = ref(orderNumbers.value[0]);
+
     // State
     const previewHTML = ref('');
     const loading = ref(false);
     const error = ref('');
+    const templates = ref([]);
     const settings = ref({
       template: 'classic-po',
       priceDisplay: 'all',
@@ -151,7 +180,7 @@ export default {
 
       try {
         const result = await api.purchaseOrders.renderPreview(
-          props.orderNumber,
+          currentOrderNumber.value,
           getPlainSettings()
         );
 
@@ -172,11 +201,28 @@ export default {
       loadPreview();
     };
 
+    // Navigation methods
+    const previousOrder = () => {
+      if (currentIndex.value > 0) {
+        currentIndex.value--;
+        currentOrderNumber.value = orderNumbers.value[currentIndex.value];
+        loadPreview();
+      }
+    };
+
+    const nextOrder = () => {
+      if (currentIndex.value < orderNumbers.value.length - 1) {
+        currentIndex.value++;
+        currentOrderNumber.value = orderNumbers.value[currentIndex.value];
+        loadPreview();
+      }
+    };
+
     const print = async () => {
       loading.value = true;
       try {
         const result = await api.poPrint.printOrder(
-          props.orderNumber,
+          currentOrderNumber.value,
           getPlainSettings()
         );
 
@@ -196,7 +242,7 @@ export default {
       loading.value = true;
       try {
         const result = await api.poPrint.saveAsPDF(
-          props.orderNumber,
+          currentOrderNumber.value,
           getPlainSettings()
         );
 
@@ -219,6 +265,37 @@ export default {
       alert('Email functionality coming in Phase 5!');
     };
 
+    const loadTemplates = async () => {
+      try {
+        const result = await api.poTemplates.getAll();
+        if (result.success) {
+          templates.value = result.templates;
+        }
+      } catch (err) {
+        console.error('Error loading templates:', err);
+      }
+    };
+
+    const loadSavedTemplate = async () => {
+      try {
+        const result = await api.preferences.get('defaultPOTemplate');
+        if (result.success && result.value) {
+          settings.value.template = result.value;
+        }
+      } catch (err) {
+        console.error('Error loading saved template:', err);
+      }
+    };
+
+    const saveTemplatePreference = async () => {
+      try {
+        await api.preferences.set('defaultPOTemplate', settings.value.template);
+        refreshPreview();
+      } catch (err) {
+        console.error('Error saving template preference:', err);
+      }
+    };
+
     const closeModal = () => {
       emit('close');
     };
@@ -231,20 +308,29 @@ export default {
     });
 
     // Lifecycle
-    onMounted(() => {
+    onMounted(async () => {
+      await loadTemplates();
+      await loadSavedTemplate();
       loadPreview();
     });
 
     return {
+      orderNumbers,
+      currentIndex,
+      currentOrderNumber,
       previewHTML,
       loading,
       error,
+      templates,
       settings,
       loadPreview,
       refreshPreview,
+      previousOrder,
+      nextOrder,
       print,
       savePDF,
       showEmailDialog,
+      saveTemplatePreference,
       closeModal
     };
   }

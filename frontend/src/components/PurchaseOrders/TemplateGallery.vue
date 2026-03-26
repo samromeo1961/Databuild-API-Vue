@@ -50,21 +50,36 @@
                   </div>
 
                   <div class="card-footer bg-transparent">
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 mb-2">
                       <button class="btn btn-sm btn-outline-primary flex-fill" @click="previewTemplate(template)">
                         <i class="bi bi-eye me-1"></i>
                         Preview
                       </button>
+                      <button class="btn btn-sm btn-outline-secondary flex-fill" @click="editTemplateHTML(template)">
+                        <i class="bi bi-code-slash me-1"></i>
+                        Edit HTML
+                      </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <button
+                        class="btn btn-sm btn-outline-secondary flex-fill"
+                        @click="setAsDefault(template)">
+                        <i class="bi bi-star me-1"></i>
+                        Set Default
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-info flex-fill"
+                        @click="duplicateTemplate(template)"
+                        title="Duplicate">
+                        <i class="bi bi-files me-1"></i>
+                        Duplicate
+                      </button>
                       <button
                         v-if="!template.isBuiltIn"
                         class="btn btn-sm btn-outline-danger"
-                        @click="deleteTemplate(template)">
+                        @click="deleteTemplate(template)"
+                        title="Delete">
                         <i class="bi bi-trash"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-secondary"
-                        @click="setAsDefault(template)">
-                        <i class="bi bi-star"></i>
                       </button>
                     </div>
                   </div>
@@ -92,6 +107,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Template HTML Editor Modal -->
+    <TemplateHtmlEditor
+      v-if="showHtmlEditor"
+      :templateId="selectedTemplate.id"
+      :templateName="selectedTemplate.name"
+      @close="showHtmlEditor = false"
+      @saved="onTemplateSaved"
+      @preview="onPreviewFromEditor"
+    />
+
+    <!-- Template Preview Modal -->
+    <TemplatePreviewModal
+      v-if="showPreview"
+      :templateId="previewTemplateId"
+      :templateName="previewTemplateName"
+      :customHtml="previewCustomHtml"
+      @close="showPreview = false"
+    />
   </div>
   <div class="modal-backdrop fade show"></div>
 </template>
@@ -99,9 +133,15 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useElectronAPI } from '../../composables/useElectronAPI';
+import TemplateHtmlEditorEnhanced from './TemplateHtmlEditorEnhanced.vue';
+import TemplatePreviewModal from './TemplatePreviewModal.vue';
 
 export default {
   name: 'TemplateGallery',
+  components: {
+    TemplateHtmlEditor: TemplateHtmlEditorEnhanced,
+    TemplatePreviewModal
+  },
   emits: ['close'],
   setup(props, { emit }) {
     const api = useElectronAPI();
@@ -110,6 +150,12 @@ export default {
     const templates = ref([]);
     const loading = ref(false);
     const defaultTemplateId = ref('');
+    const showHtmlEditor = ref(false);
+    const showPreview = ref(false);
+    const selectedTemplate = ref({});
+    const previewTemplateId = ref('');
+    const previewTemplateName = ref('');
+    const previewCustomHtml = ref(null);
 
     // Methods
     const loadTemplates = async () => {
@@ -136,9 +182,27 @@ export default {
     };
 
     const previewTemplate = async (template) => {
-      console.log('Preview template:', template);
-      // TODO: Implement preview
-      alert('Template preview coming soon!');
+      previewTemplateId.value = template.id;
+      previewTemplateName.value = template.name;
+      previewCustomHtml.value = null;
+      showPreview.value = true;
+    };
+
+    const editTemplateHTML = (template) => {
+      selectedTemplate.value = template;
+      showHtmlEditor.value = true;
+    };
+
+    const onTemplateSaved = async () => {
+      await loadTemplates();
+    };
+
+    const onPreviewFromEditor = (data) => {
+      // Preview the edited HTML
+      previewTemplateId.value = data.templateId;
+      previewTemplateName.value = 'Preview (Unsaved Changes)';
+      previewCustomHtml.value = data.html;
+      showPreview.value = true;
     };
 
     const deleteTemplate = async (template) => {
@@ -154,6 +218,44 @@ export default {
       } catch (error) {
         console.error('Error deleting template:', error);
         alert('Error deleting template: ' + error.message);
+      }
+    };
+
+    const duplicateTemplate = async (template) => {
+      // Create auto-generated name
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const newName = `${template.name} (Copy ${timestamp})`;
+
+      if (!confirm(`Duplicate "${template.name}" as "${newName}"?`)) return;
+
+      try {
+        // Load the template HTML
+        const htmlResult = await api.poTemplates.loadHTML(template.id);
+        if (!htmlResult.success) {
+          alert('Failed to load template HTML: ' + htmlResult.message);
+          return;
+        }
+
+        // Create a new custom template with the same HTML
+        const result = await api.poTemplates.save({
+          id: `custom-${Date.now()}`,
+          name: newName.trim(),
+          description: `Copy of ${template.name}`,
+          category: template.category,
+          type: template.type,
+          html: htmlResult.html,
+          isBuiltIn: false
+        });
+
+        if (result.success) {
+          alert(`Template "${newName}" created successfully! You can now edit it.`);
+          await loadTemplates();
+        } else {
+          alert('Failed to duplicate template: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Error duplicating template:', error);
+        alert('Error duplicating template: ' + error.message);
       }
     };
 
@@ -200,8 +302,18 @@ export default {
       templates,
       loading,
       defaultTemplateId,
+      showHtmlEditor,
+      showPreview,
+      selectedTemplate,
+      previewTemplateId,
+      previewTemplateName,
+      previewCustomHtml,
       previewTemplate,
+      editTemplateHTML,
+      onTemplateSaved,
+      onPreviewFromEditor,
       deleteTemplate,
+      duplicateTemplate,
       setAsDefault,
       importTemplate,
       closeModal

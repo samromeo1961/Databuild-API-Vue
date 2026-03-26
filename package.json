@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "start \"Vite Dev Server\" cmd /c \"cd frontend && npm run dev\" && timeout /t 5 /nobreak >nul && electron . --dev",
+    "dev": "start \"Vite Dev Server\" cmd /c \"cd frontend && npm run dev\" && timeout 15 bash -c 'sleep 5' && electron . --dev",
     "dev:electron-only": "electron . --dev",
     "dev:chrome": "start \"\" \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --user-data-dir=\"%TEMP%\\chrome-debug\" --new-window http://localhost:5173 && timeout /t 2 /nobreak >nul && electron . --dev",
     "dev:frontend": "cd frontend && npm run dev",
@@ -28,6 +28,10 @@
     "axios": "^1.6.0",
     "electron-store": "^8.2.0",
     "handlebars": "^4.7.8",
+    "jsreport-assets": "^1.7.2",
+    "jsreport-chrome-pdf": "^1.10.0",
+    "jsreport-core": "^2.10.1",
+    "jsreport-handlebars": "^2.1.0",
     "mssql": "^10.0.1",
     "nodemailer": "^7.0.10"
   },
